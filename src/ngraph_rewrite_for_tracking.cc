@@ -39,16 +39,17 @@ Status ReplaceNGraphVariable(Graph* graph, Node* node, Node** replacement,
   std::string container;
   std::string shared_name;
   int graph_id;
+  std::string backend_name;
   if (GetNodeAttr(node->attrs(), "container", &container) != Status::OK()) {
     container = "";
   }
   if (GetNodeAttr(node->attrs(), "shared_name", &shared_name) != Status::OK()) {
     shared_name = "";
   }
-  if (GetNodeAttr(node->attrs(), "ngraph_graph_id", &graph_id) !=
-      Status::OK()) {
-    graph_id = 0;
-  }
+
+  TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "ngraph_graph_id", &graph_id));
+
+  TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "_ngraph_backend", &backend_name));
 
   // NGRAPHVARIABLE
   TF_RETURN_IF_ERROR(
@@ -61,6 +62,7 @@ Status ReplaceNGraphVariable(Graph* graph, Node* node, Node** replacement,
           .Attr("just_looking", just_looking)
           .Attr("copy_to_tf", !outputs_ng_supported)
           .Attr("ngraph_graph_id", graph_id)
+          .Attr("_ngraph_backend", backend_name)
           .Device(node->assigned_device_name())
           .Finalize(graph, &(*replacement)));
 
@@ -90,10 +92,11 @@ Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
   TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "T", &dtype));
 
   int graph_id;
-  if (GetNodeAttr(node->attrs(), "ngraph_graph_id", &graph_id) !=
-      Status::OK()) {
-    graph_id = 0;
-  }
+  std::string backend_name;
+  TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "ngraph_graph_id", &graph_id));
+  
+  TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "_ngraph_backend", &backend_name));
+
 
   NodeBuilder::NodeOut input_ref;
   NodeBuilder::NodeOut input_val;
@@ -118,6 +121,7 @@ Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
                          .Attr("just_looking", just_looking)
                          .Attr("copy_to_tf", !outputs_ng_supported)
                          .Attr("ngraph_graph_id", graph_id)
+                         .Attr("_ngraph_backend",backend_name)
                          .Input(input_ref)
                          .Input(input_val)
                          .Device(node->assigned_device_name())

@@ -69,21 +69,21 @@ TEST(Variables, SmallGraph1) {
   std::vector<tensorflow::Tensor> ng_outputs2;
   std::vector<tensorflow::Tensor> ng_outputs3;
 
-  ng_session.Run(
+  ASSERT_OK(ng_session.Run(
       {
           var_assign,
       },
-      &ng_outputs1);
+      &ng_outputs1));
   std::cout << "initialize var: " << ng_outputs1[0].matrix<float>()
             << std::endl;
   for (int i = 0; i < 10; i++) {
-    ng_session.Run({assign}, &ng_outputs2);
+    ASSERT_OK(ng_session.Run({assign}, &ng_outputs2));
     // Print the output
     std::cout << "itr: " << i << " ,Result: " << ng_outputs2[0].matrix<float>()
               << std::endl;
   }
 
-  ng_session.Run({var}, &ng_outputs3);
+  ASSERT_OK(ng_session.Run({var}, &ng_outputs3));
   std::cout << "Final var: " << ng_outputs3[0].matrix<float>() << std::endl;
 
   // Run on TF
@@ -93,21 +93,21 @@ TEST(Variables, SmallGraph1) {
   std::vector<tensorflow::Tensor> tf_outputs2;
   std::vector<tensorflow::Tensor> tf_outputs3;
 
-  tf_session.Run(
+  ASSERT_OK(tf_session.Run(
       {
           var_assign,
       },
-      &tf_outputs1);
+      &tf_outputs1));
   std::cout << "initialize var: " << tf_outputs1[0].matrix<float>()
             << std::endl;
   for (int i = 0; i < 10; i++) {
-    tf_session.Run({assign}, &tf_outputs2);
+    ASSERT_OK(tf_session.Run({assign}, &tf_outputs2));
     // Print the output
     std::cout << "itr: " << i << " ,Result: " << tf_outputs2[0].matrix<float>()
               << std::endl;
   }
 
-  tf_session.Run({var}, &tf_outputs3);
+  ASSERT_OK(tf_session.Run({var}, &tf_outputs3));
   std::cout << "Final var: " << tf_outputs3[0].matrix<float>() << std::endl;
 
   Compare(tf_outputs1, ng_outputs1);
@@ -150,18 +150,18 @@ TEST(Variables, SmallGraph2) {
   std::vector<tensorflow::Tensor> ng_outputs2;
   std::vector<tensorflow::Tensor> ng_outputs3;
 
-  ng_session.Run({var_assign}, &ng_outputs1);
+  ASSERT_OK(ng_session.Run({var_assign}, &ng_outputs1));
   std::cout << "initialize var: " << ng_outputs1[0].matrix<float>()
             << std::endl;
 
   for (int i = 0; i < 10; i++) {
-    ng_session.Run({assign2}, &ng_outputs2);
+    ASSERT_OK(ng_session.Run({assign2}, &ng_outputs2));
     // Print the output
     std::cout << "itr: " << i << " ,Result: " << ng_outputs2[0].matrix<float>()
               << std::endl;
   }
 
-  ng_session.Run({var}, &ng_outputs3);
+  ASSERT_OK(ng_session.Run({var}, &ng_outputs3));
   std::cout << "Final var: " << ng_outputs3[0].matrix<float>() << std::endl;
 
   // Run on TF
@@ -171,15 +171,15 @@ TEST(Variables, SmallGraph2) {
   std::vector<tensorflow::Tensor> tf_outputs2;
   std::vector<tensorflow::Tensor> tf_outputs3;
 
-  tf_session.Run(
+  ASSERT_OK(tf_session.Run(
       {
           var_assign,
       },
-      &tf_outputs1);
+      &tf_outputs1));
   std::cout << "initialize var: " << tf_outputs1[0].matrix<float>()
             << std::endl;
   for (int i = 0; i < 10; i++) {
-    tf_session.Run({assign2}, &tf_outputs2);
+    ASSERT_OK(tf_session.Run({assign2}, &tf_outputs2));
     // Print the output
     std::cout << "itr: " << i << " ,Result: " << tf_outputs2[0].matrix<float>()
               << std::endl;
@@ -230,36 +230,36 @@ TEST(Variables, SmallGraph3) {
   std::vector<tensorflow::Tensor> ng_outputs4;
   std::vector<tensorflow::Tensor> ng_outputs5;
 
-  ng_session.Run(
+  ASSERT_OK(ng_session.Run(
       {
           var_assign,
       },
-      &ng_outputs1);
+      &ng_outputs1));
 
   std::cout << "initialize var: " << ng_outputs1[0].matrix<float>()
             << std::endl;
 
   for (int i = 0; i < 10; i++) {
-    ng_session.Run({assign}, &ng_outputs2);
+    ASSERT_OK(ng_session.Run({assign}, &ng_outputs2));
     // Print the output,
     // right now prints out the TF tensor
     std::cout << "itr: " << i << " ,Result: " << ng_outputs2[0].matrix<float>()
               << std::endl;
   }
-  ng_session.Run({apply_gradient_descent}, &ng_outputs3);
+  ASSERT_OK(ng_session.Run({apply_gradient_descent}, &ng_outputs3));
 
   // this apply_gradient_descent result should be {{10.0,10.0},{10.0,10.0}}
   std::cout << "ApplyGradientDescent value " << ng_outputs3[0].matrix<float>()
             << std::endl;
 
   for (int i = 0; i < 10; i++) {
-    ng_session.Run({assign}, &ng_outputs4);
+    ASSERT_OK(ng_session.Run({assign}, &ng_outputs4));
     // Print the output
     std::cout << "itr: " << i << " ,Result: " << ng_outputs4[0].matrix<float>()
               << std::endl;
   }
 
-  ng_session.Run({var}, &ng_outputs5);
+  ASSERT_OK(ng_session.Run({var}, &ng_outputs5));
   std::cout << "Final var: " << ng_outputs5[0].matrix<float>() << std::endl;
 
   // Run on TF
@@ -271,36 +271,36 @@ TEST(Variables, SmallGraph3) {
   std::vector<tensorflow::Tensor> tf_outputs4;
   std::vector<tensorflow::Tensor> tf_outputs5;
 
-  tf_session.Run(
+  ASSERT_OK(tf_session.Run(
       {
           var_assign,
       },
-      &tf_outputs1);
+      &tf_outputs1));
 
   std::cout << "initialize var: " << tf_outputs1[0].matrix<float>()
             << std::endl;
 
   for (int i = 0; i < 10; i++) {
-    tf_session.Run({assign}, &tf_outputs2);
+    ASSERT_OK(tf_session.Run({assign}, &tf_outputs2));
     // Print the output,
     // right now prints out the TF tensor
     std::cout << "itr: " << i << " ,Result: " << tf_outputs2[0].matrix<float>()
               << std::endl;
   }
-  tf_session.Run({apply_gradient_descent}, &tf_outputs3);
+  ASSERT_OK(tf_session.Run({apply_gradient_descent}, &tf_outputs3));
 
   // this apply_gradient_descent result should be {{10.0,10.0},{10.0,10.0}}
   std::cout << "ApplyGradientDescent value " << tf_outputs3[0].matrix<float>()
             << std::endl;
 
   for (int i = 0; i < 10; i++) {
-    tf_session.Run({assign}, &tf_outputs4);
+    ASSERT_OK(tf_session.Run({assign}, &tf_outputs4));
     // Print the output
     std::cout << "itr: " << i << " ,Result: " << tf_outputs4[0].matrix<float>()
               << std::endl;
   }
 
-  tf_session.Run({var}, &tf_outputs5);
+  ASSERT_OK(tf_session.Run({var}, &tf_outputs5));
   std::cout << "Final var: " << tf_outputs5[0].matrix<float>() << std::endl;
 
   Compare(tf_outputs1, ng_outputs1);
@@ -351,10 +351,10 @@ TEST(Variables, SmallGraph4) {
   std::vector<tensorflow::Tensor> ng_outputs4;
   std::vector<tensorflow::Tensor> ng_outputs5;
 
-  ng_session.Run({var1_assign, var2_assign}, &ng_outputs1);
+  ASSERT_OK(ng_session.Run({var1_assign, var2_assign}, &ng_outputs1));
 
   for (int i = 0; i < 10; i++) {
-    ng_session.Run({assign}, &ng_outputs2);
+    ASSERT_OK(ng_session.Run({assign}, &ng_outputs2));
     // Print the output,
     // right now prints out the TF tensor
     std::cout << "itr: " << i << " ,Result: " << ng_outputs2[0].matrix<float>()
@@ -362,14 +362,14 @@ TEST(Variables, SmallGraph4) {
   }
 
   for (int i = 0; i < 5; i++) {
-    ng_session.Run({apply_gradient_descent}, &ng_outputs3);
+    ASSERT_OK(ng_session.Run({apply_gradient_descent}, &ng_outputs3));
   }
 
   for (int i = 0; i < 10; i++) {
-    ng_session.Run({mul2}, &ng_outputs4);
+    ASSERT_OK(ng_session.Run({mul2}, &ng_outputs4));
   }
 
-  ng_session.Run({var1, var2}, &ng_outputs5);
+  ASSERT_OK(ng_session.Run({var1, var2}, &ng_outputs5));
 
   // Run on TF
   DeactivateNGraph();
@@ -380,21 +380,21 @@ TEST(Variables, SmallGraph4) {
   std::vector<tensorflow::Tensor> tf_outputs4;
   std::vector<tensorflow::Tensor> tf_outputs5;
 
-  tf_session.Run({var1_assign, var2_assign}, &tf_outputs1);
+  ASSERT_OK(tf_session.Run({var1_assign, var2_assign}, &tf_outputs1));
 
   for (int i = 0; i < 10; i++) {
-    tf_session.Run({assign}, &tf_outputs2);
+    ASSERT_OK(tf_session.Run({assign}, &tf_outputs2));
   }
 
   for (int i = 0; i < 5; i++) {
-    tf_session.Run({apply_gradient_descent}, &tf_outputs3);
+    ASSERT_OK(tf_session.Run({apply_gradient_descent}, &tf_outputs3));
   }
 
   for (int i = 0; i < 10; i++) {
-    tf_session.Run({mul2}, &tf_outputs4);
+    ASSERT_OK(tf_session.Run({mul2}, &tf_outputs4));
   }
 
-  tf_session.Run({var1, var2}, &tf_outputs5);
+  ASSERT_OK(tf_session.Run({var1, var2}, &tf_outputs5));
 
   Compare(tf_outputs1, ng_outputs1);
   Compare(tf_outputs2, ng_outputs2);
