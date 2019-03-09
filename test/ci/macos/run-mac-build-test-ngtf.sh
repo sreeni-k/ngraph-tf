@@ -60,9 +60,8 @@ if [ -d "${bbuild_dir}" ] ; then
     exit 1
 fi
 
-xtime="$(date)"
 echo  ' '
-echo  "===== Enabling Python Version 3 (on the Mac) at ${xtime} ====="
+echo  "===== Enabling Python Version 3 (on the Mac) at $(date) ====="
 echo  ' '
 
 # Currently build_ngtf.py only works with Python 3
@@ -85,23 +84,20 @@ fi
 mkdir "${bridge_dir}/bazel-cache"
 ln -s "${bridge_dir}/bazel-cache" "$HOME/.cache"
 
-xtime="$(date)"
 echo  ' '
-echo  "===== Run MacOS Build Using build_ngtf.py at ${xtime} ====="
+echo  "===== Run MacOS Build Using build_ngtf.py at $(date) ====="
 echo  ' '
 
 cd "${bridge_dir}"
 ./build_ngtf.py
 
-xtime="$(date)"
 echo  ' '
-echo  "===== Run MacOS Unit-Tests Using test_ngtf.py at ${xtime} ====="
+echo  "===== Run MacOS Unit-Tests Using test_ngtf.py at $(date) ====="
 echo  ' '
 
 cd "${bridge_dir}"
 ./test_ngtf.py
 
-xtime="$(date)"
 echo ' '
-echo "===== Completed MacOS Tensorflow Build and Test at ${xtime} ====="
+echo "===== Completed MacOS Tensorflow Build and Test at $(date) ====="
 echo ' '
