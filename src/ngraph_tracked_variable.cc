@@ -82,20 +82,22 @@ NGraphVariableOp::NGraphVariableOp(OpKernelConstruction* context)
       tracker_(nullptr),
       just_looking_(false),
       copy_to_tf_(false),
-      //ng_backend_name_("CPU"),  // can be through an attribute like encapsulate
+      // ng_backend_name_("CPU"),  // can be through an attribute like
+      // encapsulate
       dtype_(RemoveRefType(context->output_type(0))) {
   OP_REQUIRES_OK(context, context->GetAttr("shape", &shape_));
   OP_REQUIRES_OK(context, context->GetAttr("just_looking", &just_looking_));
   OP_REQUIRES_OK(context, context->GetAttr("copy_to_tf", &copy_to_tf_));
   OP_REQUIRES_OK(context, context->GetAttr("ngraph_graph_id", &ng_graph_id_));
-  OP_REQUIRES_OK(context, context->GetAttr("_ngraph_backend", &ng_backend_name_));
+  OP_REQUIRES_OK(context,
+                 context->GetAttr("_ngraph_backend", &ng_backend_name_));
   NGRAPH_VLOG(5) << def().name() << ": just looking? " << just_looking_;
   //  NGRAPH_VLOG(5) << def().name() << ": just looking? " << just_looking_;
   NGRAPH_VLOG(1) << "Constructor "
                  << "Graph_id " << ng_graph_id_
                  << " ,Node Name: " << def().name() << ": just looking? "
-                 << just_looking_ << " ,copy-to-tf " << copy_to_tf_ <<
-                 "backend "<<ng_backend_name_;
+                 << just_looking_ << " ,copy-to-tf " << copy_to_tf_
+                 << "backend " << ng_backend_name_;
 }
 
 NGraphVariableOp::~NGraphVariableOp() { tracker_->Unref(); }
@@ -104,7 +106,8 @@ NGraphVariableOp::~NGraphVariableOp() { tracker_->Unref(); }
 // constructor.)
 void NGraphVariableOp::Compute(OpKernelContext* ctx) {
   NGRAPH_VLOG(1) << "Compute " << def().name();
-  NGRAPH_VLOG(1) << "Graph ID " << ng_graph_id_ <<"Backend "<<ng_backend_name_;
+  NGRAPH_VLOG(1) << "Graph ID " << ng_graph_id_ << "Backend "
+                 << ng_backend_name_;
   mutex_lock l(init_mu_);
   if (!initialized_) {
     // Analyze the node attribute of 'ndef' and decides the container and

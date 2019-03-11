@@ -443,13 +443,13 @@ class NGraphEncapsulateOp : public OpKernel {
       bool ref_exists =
           NGraphCatalog::ExistsInCatalog(m_graph_id, def().name(), i);
 
-      if(ref_exists){
-        NGRAPH_VLOG(1)<<" Input from variable exiting ";
+      if (ref_exists) {
+        NGRAPH_VLOG(1) << " Input from variable exiting ";
         ng_inputs.push_back(nullptr);
         continue;
       }
 
-      NGRAPH_VLOG(1)<<" Getting Input from non variable ";
+      NGRAPH_VLOG(1) << " Getting Input from non variable ";
       ng::Shape ng_shape(input_shapes[i].dims());
       for (int j = 0; j < input_shapes[i].dims(); ++j) {
         ng_shape[j] = input_shapes[i].dim_size(j);
