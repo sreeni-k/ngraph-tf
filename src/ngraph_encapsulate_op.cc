@@ -357,9 +357,7 @@ class NGraphEncapsulateOp : public OpKernel {
       }  // cache eviction if cache size greater than cache depth
 
       BackendManager::LockBackend(m_op_backend_name);
-      // NGRAPH_VLOG(4)
-      //     << "NGraphEncapsulateOp::Compute call starting for cluster "
-      //     << m_ngraph_cluster;
+
       try {
         ng_exec = op_backend->compile(ng_function);
       } catch (const std::exception& exp) {
