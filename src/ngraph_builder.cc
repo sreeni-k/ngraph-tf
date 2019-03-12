@@ -492,56 +492,6 @@ static Status TranslateAddNOp(
 }
 
 template <typename T>
-static Status TranslateLogicalReduction(
-    const Node* op, const std::vector<const Tensor*>& static_input_map,
-    Builder::OpMap& ng_op_map,
-    const std::vector<shared_ptr<ng::Node>>& ng_inputs) {
-  static_assert(std::is_base_of<ngraph::op::util::LogicalReduction, T>::value,
-                "Expected LogicalReduction type op (Any or All)");
-
-  bool tf_keep_dims;
-  if (GetNodeAttr(op->attrs(), "keep_dims", &tf_keep_dims) != Status::OK()) {
-    tf_keep_dims = false;
-  }
-
-  std::vector<int64> all_axes;
-  TF_RETURN_IF_ERROR(GetStaticInputVector(op, 1, static_input_map, &all_axes));
-
-  ng::Shape input_shape = ng_inputs[0]->get_shape();
-  size_t input_rank = ng_inputs[0]->get_shape().size();
-
-  TF_RETURN_IF_ERROR(CheckAxisDimInRange(all_axes, input_rank));
-
-  std::vector<size_t> ng_reduction_axes_vect(all_axes.size());
-  std::transform(
-      all_axes.begin(), all_axes.end(), ng_reduction_axes_vect.begin(),
-      [input_rank](int idx) { return idx + (idx < 0 ? (int)input_rank : 0); });
-  ng::AxisSet ng_reduction_axes(ng_reduction_axes_vect);
-
-  shared_ptr<ng::Node> ng_all_or_any =
-      make_shared<T>(ng_inputs[0], ng_reduction_axes);
-
-  // If keep_dims is specified we need to reshape to put back the reduced
-  // axes, with length 1.
-  if (tf_keep_dims) {
-    ng::Shape ng_result_shape_with_keep(input_rank);
-
-    for (size_t i = 0; i < input_rank; i++) {
-      ng_result_shape_with_keep[i] =
-          ng_reduction_axes.count(i) == 0 ? input_shape[i] : 1;
-    }
-
-    ng::AxisVector ng_axis_order(ng_all_or_any->get_shape().size());
-    std::iota(ng_axis_order.begin(), ng_axis_order.end(), 0);
-    ng_all_or_any = make_shared<ng::op::Reshape>(ng_all_or_any, ng_axis_order,
-                                                 ng_result_shape_with_keep);
-  }
-
-  SaveNgOp(ng_op_map, op->name(), ng_all_or_any);
-  return Status::OK();
-}
-
-template <typename T>
 static Status TranslateArgMinMaxOp(
     const Node* op, const std::vector<const Tensor*>& static_input_map,
     Builder::OpMap& ng_op_map,
@@ -2211,14 +2161,20 @@ static Status TranslateMeanOp(
       });
 }
 
-static Status TranslateSumOp(
+template <typename T>
+static Status TranslateDirectReduceOp(
     const Node* op, const std::vector<const Tensor*>& static_input_map,
     Builder::OpMap& ng_op_map,
     const std::vector<shared_ptr<ng::Node>>& ng_inputs) {
+  // ensure its Any, All or Sum
+  if (!(std::is_same<T, ng::op::Sum>::value ||
+        std::is_base_of<ngraph::op::util::LogicalReduction, T>::value)) {
+    return errors::InvalidArgument("Expected node to be Sum, Any or All type");
+  }
   return TranslateReduceOp(
       op, static_input_map, ng_op_map, ng_inputs,
       [](std::shared_ptr<ng::Node> ng_input, ng::AxisSet ng_reduction_axes) {
-        return make_shared<ng::op::Sum>(ng_input, ng_reduction_axes);
+        return make_shared<T>(ng_input, ng_reduction_axes);
       });
 }
 
@@ -3908,8 +3864,8 @@ const static std::map<
         {"Abs", TranslateUnaryOp<ngraph::op::Abs>},
         {"Add", TranslateBinaryOp<ngraph::op::Add>},
         {"AddN", TranslateAddNOp},
-        {"Any", TranslateLogicalReduction<ng::op::Any>},
-        {"All", TranslateLogicalReduction<ng::op::All>},
+        {"Any", TranslateDirectReduceOp<ng::op::Any>},
+        {"All", TranslateDirectReduceOp<ng::op::All>},
         {"ArgMax", TranslateArgMinMaxOp<ng::op::ArgMax>},
         {"ArgMin", TranslateArgMinMaxOp<ng::op::ArgMin>},
         {"AvgPool", TranslateAvgPoolOp},
@@ -3949,7 +3905,9 @@ const static std::map<
         {"LogicalNot", TranslateUnaryOp<ngraph::op::Not>},
         {"LogicalOr", TranslateBinaryOp<ngraph::op::Or>},
         {"MatMul", TranslateMatMulOp},
-        {"Max", TranslateMinMaxOp<ng::op::Max>},
+        {"Max",
+         TranslateMinMaxOp<
+             ng::op::Max>},  //{"Max", TranslateDirectReduceOp<ng::op::Max>},
         {"Maximum", TranslateBinaryOp<ngraph::op::Maximum>},
         {"MaxPool", TranslateMaxPoolOp},
         {"MaxPool3D", TranslateMaxPool3DOp},
@@ -4008,7 +3966,7 @@ const static std::map<
         {"Squeeze", TranslateSqueezeOp},
         {"StridedSlice", TranslateStridedSliceOp},
         {"Sub", TranslateBinaryOp<ngraph::op::Subtract>},
-        {"Sum", TranslateSumOp},
+        {"Sum", TranslateDirectReduceOp<ngraph::op::Sum>},
         {"Tanh", TranslateUnaryOp<ngraph::op::Tanh>},
         {"TanhGrad", TranslateTanhGradOp},
         {"Tile", TranslateTileOp},
