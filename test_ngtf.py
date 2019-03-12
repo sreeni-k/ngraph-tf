@@ -27,7 +27,7 @@ from distutils.sysconfig import get_python_lib
 from build_ngtf import load_venv, command_executor
 
 
-def run_ngtf_gtests(build_dir):
+def run_ngtf_gtests(build_dir, filters):
     root_pwd = os.getcwd()
     build_dir = os.path.abspath(build_dir)
 
@@ -38,7 +38,13 @@ def run_ngtf_gtests(build_dir):
 
     # First run the C++ gtests
     os.chdir(os.path.join(build_dir, "test"))
-    command_executor("./gtest_ngtf")
+    if (filters != None):
+        gtest_filters = "--gtest_filter=" + filters
+        cmd = ['./gtest_ngtf', gtest_filters]
+    else:
+        cmd = ['./gtest_ngtf']
+
+    command_executor(cmd, verbose=True)
 
     os.chdir(root_pwd)
 
@@ -112,8 +118,8 @@ def run_tensorflow_pytests(venv_dir, build_dir, ngraph_tf_src_dir, tf_src_dir):
 
     command_executor([
         "python", test_script, "--tensorflow_path", tf_src_dir,
-        "--run_tests_from_file", test_manifest_file, 
-        "--xml_report", test_xml_report
+        "--run_tests_from_file", test_manifest_file, "--xml_report",
+        test_xml_report
     ])
 
     os.chdir(root_pwd)
@@ -216,6 +222,26 @@ def run_cpp_example_test(build_dir):
     os.chdir(root_pwd)
 
 
+def run_bazel_build_test(venv_dir, build_dir):
+    # Load the virtual env
+    venv_dir_absolute = load_venv(venv_dir)
+
+    # Next patch the TensorFlow so that the tests run using ngraph_bridge
+    root_pwd = os.getcwd()
+
+    # Now run the configure
+    command_executor(['bash', 'configure_bazel.sh'])
+
+    # Build the bridge
+    command_executor(['bazel', 'build', 'libngraph_bridge.so'])
+    
+    # Build the backend
+    command_executor(['bazel', 'build', '@ngraph//:libinterpreter_backend.so'])
+
+    # Return to the original directory
+    os.chdir(root_pwd)
+
+
 def main():
     '''
     Tests nGraph-TensorFlow Python 3. This script needs to be run after 
@@ -225,6 +251,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--test_examples',
+        help="Builds and tests the examples.\n",
+        action="store_true")
+
+    parser.add_argument(
+        '--gpu_unit_tests_enable',
         help="Builds and tests the examples.\n",
         action="store_true")
 
@@ -240,13 +271,32 @@ def main():
     build_dir = 'build'
     venv_dir = 'build/venv-tf-py3'
 
+    if (platform.system() != 'Darwin'):
+        # Run the bazel based buil
+        run_bazel_build_test(venv_dir, build_dir)
+
     # First run the C++ gtests
-    run_ngtf_gtests(build_dir)
+    run_ngtf_gtests(build_dir,None)
+
+    # If the GPU tests are requested, then run them as well
+    if (arguments.gpu_unit_tests_enable):
+        os.environ['NGRAPH_TF_BACKEND'] = 'GPU'
+        run_ngtf_gtests(
+            build_dir, 
+            str("-ArrayOps.Quanti*:ArrayOps.Dequant*:BackendManager.BackendAssignment:"
+            "MathOps.AnyKeepDims:MathOps.AnyNegativeAxis:MathOps.AnyPositiveAxis:"
+            "MathOps.AllKeepDims:MathOps.AllNegativeAxis:MathOps.AllPositiveAxis:"
+            "NNOps.Qu*:NNOps.SoftmaxZeroDimTest*:"
+            "NNOps.SparseSoftmaxCrossEntropyWithLogits")
+        )
+
+    os.environ['NGRAPH_TF_BACKEND'] = 'CPU'
 
     # Next run Python unit tests
+    load_venv(venv_dir)
     run_ngtf_pytests(venv_dir, build_dir)
 
-    if (arguments.test_examples): 
+    if (arguments.test_examples):
         # Run the C++ example build/run test
         run_cpp_example_test('build')
 
