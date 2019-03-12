@@ -1864,60 +1864,6 @@ static Status TranslateMatMulOp(
   return Status::OK();
 }
 
-template <typename T>
-static Status TranslateMinMaxOp(
-    const Node* op, const std::vector<const Tensor*>& static_input_map,
-    Builder::OpMap& ng_op_map,
-    const std::vector<shared_ptr<ng::Node>>& ng_inputs) {
-  bool is_max = std::is_same<T, ng::op::Max>::value;
-  bool is_min = std::is_same<T, ng::op::Min>::value;
-  if (!(is_max || is_min)) {
-    return errors::InvalidArgument("Expected node to be Min or Max type");
-  }
-
-  bool tf_keep_dims;
-  if (GetNodeAttr(op->attrs(), "keep_dims", &tf_keep_dims) != Status::OK()) {
-    tf_keep_dims = false;
-  }
-
-  std::vector<int64> axes;
-  TF_RETURN_IF_ERROR(GetStaticInputVector(op, 1, static_input_map, &axes));
-
-  ng::Shape input_shape = ng_inputs[0]->get_shape();
-  size_t input_rank = input_shape.size();
-
-  TF_RETURN_IF_ERROR(CheckAxisDimInRange(axes, input_rank));
-
-  std::vector<size_t> ng_reduction_axes_vect(axes.size());
-  std::transform(
-      axes.begin(), axes.end(), ng_reduction_axes_vect.begin(),
-      [input_rank](int idx) { return idx + (idx < 0 ? (int)input_rank : 0); });
-  ng::AxisSet ng_reduction_axes(ng_reduction_axes_vect);
-
-  std::shared_ptr<ng::Node> ng_node =
-      make_shared<T>(ng_inputs[0], ng_reduction_axes);
-
-  // If keep_dims is specified we need to reshape to put back the reduced
-  // axes, with length 1.
-  if (tf_keep_dims) {
-    ng::Shape ng_result_shape_with_keep(input_rank);
-
-    for (size_t i = 0; i < input_rank; i++) {
-      ng_result_shape_with_keep[i] =
-          ng_reduction_axes.count(i) == 0 ? input_shape[i] : 1;
-    }
-
-    ng::AxisVector ng_axis_order(ng_node->get_shape().size());
-    std::iota(ng_axis_order.begin(), ng_axis_order.end(), 0);
-
-    ng_node = make_shared<ng::op::Reshape>(ng_node, ng_axis_order,
-                                           ng_result_shape_with_keep);
-  }
-
-  SaveNgOp(ng_op_map, op->name(), ng_node);
-  return Status::OK();
-}
-
 static Status TranslateMaxPoolOp(
     const Node* op, const std::vector<const Tensor*>& static_input_map,
     Builder::OpMap& ng_op_map,
@@ -2166,8 +2112,10 @@ static Status TranslateDirectReduceOp(
     const Node* op, const std::vector<const Tensor*>& static_input_map,
     Builder::OpMap& ng_op_map,
     const std::vector<shared_ptr<ng::Node>>& ng_inputs) {
-  // ensure its Any, All or Sum
+  // ensure its Any, All, Min, Max or Sum
   if (!(std::is_same<T, ng::op::Sum>::value ||
+        std::is_same<T, ng::op::Max>::value ||
+        std::is_same<T, ng::op::Min>::value ||
         std::is_base_of<ngraph::op::util::LogicalReduction, T>::value)) {
     return errors::InvalidArgument("Expected node to be Sum, Any or All type");
   }
@@ -3905,15 +3853,13 @@ const static std::map<
         {"LogicalNot", TranslateUnaryOp<ngraph::op::Not>},
         {"LogicalOr", TranslateBinaryOp<ngraph::op::Or>},
         {"MatMul", TranslateMatMulOp},
-        {"Max",
-         TranslateMinMaxOp<
-             ng::op::Max>},  //{"Max", TranslateDirectReduceOp<ng::op::Max>},
+        {"Max", TranslateDirectReduceOp<ng::op::Max>},
         {"Maximum", TranslateBinaryOp<ngraph::op::Maximum>},
         {"MaxPool", TranslateMaxPoolOp},
         {"MaxPool3D", TranslateMaxPool3DOp},
         {"MaxPoolGrad", TranslateMaxPoolGradOp},
         {"Mean", TranslateMeanOp},
-        {"Min", TranslateMinMaxOp<ng::op::Min>},
+        {"Min", TranslateDirectReduceOp<ng::op::Min>},
         {"Minimum", TranslateBinaryOp<ngraph::op::Minimum>},
         {"Mul", TranslateBinaryOp<ngraph::op::Multiply>},
         {"Neg", TranslateUnaryOp<ngraph::op::Negative>},
