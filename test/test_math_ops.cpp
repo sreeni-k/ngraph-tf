@@ -237,6 +237,70 @@ TEST(MathOps, AllKeepDims) {
   opexecuter.RunTest();
 }
 
+// Test op: Sum with and without keep dims and with both positive and negative
+// axis
+TEST(MathOps, MeanKeepDims) {
+  int dim1 = 2;
+  int dim2 = 2;
+
+  std::vector<int> v = {1, 2, 3, 4};
+  Tensor A(DT_INT32, TensorShape({dim1, dim2}));
+  vector<bool> v_keep_dims = {true, false};
+  // axis at which the dimension will be inserted
+  // should be -rank <= axis < rank
+  vector<int> v_axis = {-1, 0, 1};
+  for (auto axis : v_axis) {
+    for (auto keep_dims : v_keep_dims) {
+      Scope root = Scope::NewRootScope();
+      auto keep_dims_attr = ops::Sum::Attrs().KeepDims(keep_dims);
+
+      AssignInputValues<int>(A, v);
+
+      vector<int> static_input_indexes = {1};
+      vector<DataType> output_datatypes = {DT_INT32};
+
+      auto R = ops::Sum(root, A, axis, keep_dims_attr);
+      std::vector<Output> sess_run_fetchoutputs = {R};
+      OpExecuter opexecuter(root, "Sum", static_input_indexes, output_datatypes,
+                            sess_run_fetchoutputs);
+
+      opexecuter.RunTest();
+    }
+  }
+}
+
+// Test op: Mean with and without keep dims and with both positive and negative
+// axis
+TEST(MathOps, Mean) {
+  int dim1 = 2;
+  int dim2 = 2;
+
+  std::vector<int> v = {1, 2, 3, 4};
+  Tensor A(DT_INT32, TensorShape({dim1, dim2}));
+  vector<bool> v_keep_dims = {true, false};
+  // axis at which the dimension will be inserted
+  // should be -rank <= axis < rank
+  vector<int> v_axis = {-1, 0, 1};
+  for (auto axis : v_axis) {
+    for (auto keep_dims : v_keep_dims) {
+      Scope root = Scope::NewRootScope();
+      auto keep_dims_attr = ops::Mean::Attrs().KeepDims(keep_dims);
+
+      AssignInputValues<int>(A, v);
+
+      vector<int> static_input_indexes = {1};
+      vector<DataType> output_datatypes = {DT_INT32};
+
+      auto R = ops::Mean(root, A, axis, keep_dims_attr);
+      std::vector<Output> sess_run_fetchoutputs = {R};
+      OpExecuter opexecuter(root, "Mean", static_input_indexes,
+                            output_datatypes, sess_run_fetchoutputs);
+
+      opexecuter.RunTest();
+    }
+  }
+}
+
 TEST(MathOps, AllNegativeAxis) {
   Scope root = Scope::NewRootScope();
   int dim1 = 2;
