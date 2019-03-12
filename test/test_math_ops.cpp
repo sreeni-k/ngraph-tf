@@ -237,9 +237,8 @@ TEST(MathOps, AllKeepDims) {
   opexecuter.RunTest();
 }
 
-// Test op: Sum with and without keep dims and with both positive and negative
-// axis
-TEST(MathOps, MeanKeepDims) {
+// Test op: Sum with & without keep dims & with both positive & negative axis
+TEST(MathOps, Sum) {
   int dim1 = 2;
   int dim2 = 2;
 
@@ -269,8 +268,7 @@ TEST(MathOps, MeanKeepDims) {
   }
 }
 
-// Test op: Mean with and without keep dims and with both positive and negative
-// axis
+// Test op: Mean with & without keep dims & with both positive & negative axis
 TEST(MathOps, Mean) {
   int dim1 = 2;
   int dim2 = 2;
