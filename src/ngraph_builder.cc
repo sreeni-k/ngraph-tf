@@ -81,6 +81,15 @@ static void SaveNgOp(Builder::OpMap& ng_op_map, const std::string& op_name,
   // no need to try-catch, map[key] will create vector object
   // if not exists
   ng_op_map[op_name].push_back(output_node);
+  try {
+    output_node->set_friendly_name(op_name + "_" +
+                                   to_string(ng_op_map[op_name].size()));
+  } catch (const ngraph::ngraph_error& e) {
+    // Some outputs of the ngraph subgraph created when translating a TF op
+    // might use the same ngraph node for more than 1 output. This will cause
+    // SaveNgOp to be called twice. However the set_friendly_name api throws an
+    // error on the second call. For our purposes we can safely ignore the error
+  }
 }
 
 // Helper for fetching correct input node from ng_op_map.
@@ -466,9 +475,7 @@ static Status TranslateAllreduceOp(
     Builder::OpMap& ng_op_map,
     const std::vector<shared_ptr<ng::Node>>& ng_inputs) {
   auto ng_all_reduce = make_shared<ng::op::AllReduce>(ng_inputs[0]);
-  ng_all_reduce->set_friendly_name(op->name());
   SaveNgOp(ng_op_map, op->name(), ng_all_reduce);
-
   return Status::OK();
 }
 
@@ -4108,7 +4115,8 @@ Status Builder::TranslateGraph(
   //
   vector<shared_ptr<ng::op::Parameter>> ng_parameter_list(tf_params.size());
 
-  for (auto parm : tf_params) {
+  for (int parm_idx = 0; parm_idx < tf_params.size(); parm_idx++) {
+    auto parm = tf_params[parm_idx];
     DataType dtype;
     if (GetNodeAttr(parm->attrs(), "T", &dtype) != Status::OK()) {
       return errors::InvalidArgument("No data type defined for _Arg");
@@ -4126,6 +4134,7 @@ Status Builder::TranslateGraph(
 
     auto ng_param = make_shared<ng::op::Parameter>(ng_et, ng_shape);
     SaveNgOp(ng_op_map, parm->name(), ng_param);
+
     ng_parameter_list[index] = ng_param;
   }
 
@@ -4156,12 +4165,9 @@ Status Builder::TranslateGraph(
 
     try {
       std::vector<shared_ptr<ng::Node>> ng_arg_vec(op->num_inputs());
-      Node* tf_input;
       for (int inp_idx = 0; inp_idx < op->num_inputs(); inp_idx++) {
         TF_RETURN_IF_ERROR(
             GetInputNode(ng_op_map, op, inp_idx, &ng_arg_vec[inp_idx]));
-        TF_RETURN_IF_ERROR(op->input_node(inp_idx, &tf_input));
-        ng_arg_vec[inp_idx]->set_friendly_name(tf_input->name());
       }
 
       TF_RETURN_IF_ERROR(
