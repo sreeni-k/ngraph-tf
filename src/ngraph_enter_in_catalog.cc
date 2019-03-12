@@ -63,6 +63,7 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
   vector<Node*> add_graph_id;
 
   for (auto node : ordered) {
+    // Update the input variable map
     if (IsNGVariableType(node->type_string())) {
       string node_key = NGraphCatalog::CreateNodeKey(graph_id, node->name(), 0);
       string shared_name;
@@ -73,6 +74,7 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
       NGRAPH_VLOG(1) << "Key: " << node_key;
       NGRAPH_VLOG(1) << "Value: " << shared_name;
     } else if (node->type_string() == "NGraphEncapsulate") {
+      // input catalog
       for (auto edge : node->in_edges()) {
         if (edge->src()->IsOp() && !edge->IsControlEdge() &&
             IsNGVariableType(edge->src()->type_string())) {
@@ -87,9 +89,47 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
           NGRAPH_VLOG(1) << "Value: " << shared_name;
         }
       }
+
+      //output ng-copy map catalog
+      unordered_set<int> op_index_to_copy;
+      NGRAPH_VLOG(1) << "Finding Output Copy required for "<< node->name();
+      for (auto edge : node->in_edges()) {
+        if (edge->dst()->IsOp() && !edge->IsControlEdge() &&
+            !IsNGVariableType(edge->dst()->type_string())) {
+          NGRAPH_VLOG(1) << "Output Copy required for "<< node->name() <<" ,index: " <<edge->src_output() <<" dstOpType "<< edge->dst()->type_string();
+          op_index_to_copy.insert(edge->src_output());
+        }
+      }
+      NGraphCatalog::AddEncapCopyOutputCatalog(node->name() ,op_index_to_copy);
+
       add_graph_id.push_back(node);
     }
-  }
+
+    // Update the output tensor map
+    if(node->type_string() == "NGraphAssign"){
+      for (auto edge : node->in_edges()) {
+        if (!edge->src()->IsOp() || edge->IsControlEdge() || IsRefType(edge->dst()->input_type(edge->dst_input())) || edge->src()->type_string()!="NGraphEncapsulate" ){
+          continue;
+        }
+        
+        auto src = edge->src();
+        int src_output = edge->src_output();
+        string node_key;
+        if(src_output==0){
+          node_key = to_string(graph_id) + "_" + src->name();
+        }
+        else{
+          node_key = NGraphCatalog::CreateNodeKey(graph_id, src->name(),
+                                                         src_output);
+        }
+        //Will be updated with real tensors in Encapsulate
+        NGraphCatalog::AddOutputCatalog(node_key, nullptr);
+        NGRAPH_VLOG(1) << "Adding in output Catalog ";
+        NGRAPH_VLOG(1) << "Key: " << node_key;
+        
+        }
+      }
+  } // enter in catalog
 
   for (auto node : add_graph_id) {
     node->AddAttr("ngraph_graph_id", graph_id);

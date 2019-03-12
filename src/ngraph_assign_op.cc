@@ -104,21 +104,24 @@ class NGraphAssignOp : public OpKernel {
 
     // DO NOT CARE ABOUT SYNCING AS WE ARE ALWAYS SETTING THE NGTENSOR
 
-    // bool temp_check = (def().name() == "Assign_1/peek/non_ng_outputs");
-    // if(temp_check){
-    //   // Value is from encap
-    //   string ng_op_string = "NGraphEncapsulate" + to_string(1) +"_"
-    //   +to_string(0);
-    //   NGRAPH_VLOG(1)<<"Directly assigning from" <<ng_op_string;
-    //   auto ng_val = BackendManager::ng_output_map_[ng_op_string];
-    //   ng_tensor_to_assign->copy_from(*ng_val);
-    // }
-    // else{
+    
+    string valkey = to_string(ng_graph_id_) + "_" + def().input(1);
+    bool valref_exists = NGraphCatalog::ExistsInOutputCatalog(valkey);
+    if(valref_exists){
+     // Value is from encap
+      NGRAPH_VLOG(1)<<"Directly assigning from : " <<valkey;
+      auto ng_val = NGraphCatalog::GetNgTensorFromOutputCatalog(valkey);
+      NGRAPH_VLOG(1)<<"Got tensor " <<valkey << " "<<ng_val;
+      NGRAPH_VLOG(1)<<"Is null " << ((ng_val==NULL) ? "Yes" : "No");
+      ng_tensor_to_assign->copy_from(*ng_val);
+    }
+    else{
+    NGRAPH_VLOG(1)<<"Getting from TF : " <<valkey;
     void* tf_src_ptr = (void*)DMAHelper::base(&rhs);
     ng_tensor_to_assign->write(
         tf_src_ptr, 0, ng_tensor_to_assign->get_element_count() *
                            ng_tensor_to_assign->get_element_type().size());
-    // }
+    }
 
     NGRAPH_VLOG(1) << " Print NG Tensor ";
     //PrintNGTensor(ng_tensor_to_assign);
