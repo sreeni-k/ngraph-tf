@@ -69,13 +69,35 @@ class NGraphCatalog {
   // Value : variable shared_name
   // LOCK?
   static unordered_map<string, string> input_variable_map_;
+
+  // Map keeps track of nodes whose input is a variable tensor
+  // Will be used by Assign/Optimizers
+  // Map of
+  // Key string : GraphId + _ + nodename + : + output_index
+  // Value : shared_ptr<ng::runtime::Tensor>
+  static unordered_map<string, shared_ptr<ng::runtime::Tensor>> output_tensor_map_;
+
+
+  static unordered_map<string, unordered_set<int>> ng_encap_output_copy_map_;
+  static void AddEncapCopyOutputCatalog(string key, unordered_set<int> val);
+  static bool EncapOutputNeedsCopy(string key, int index);
+
   static string GetInputSharedName(int graphid, string node_name,
                                    int input_index);
   static string CreateNodeKey(int graph_id, string node_name, int inp_index);
+  
   static void AddCatalog(string key, string val);
 
   static bool ExistsInCatalog(string key);
   static bool ExistsInCatalog(int graphid, string node_name, int input_index);
+
+
+  static void AddOutputCatalog(string key, shared_ptr<ng::runtime::Tensor> ng_val);
+  static bool ExistsInOutputCatalog(string key);
+  static bool ExistsInOutputCatalog(int graphid, string node_name, int input_index);
+
+  static shared_ptr<ng::runtime::Tensor> GetNgTensorFromOutputCatalog(string key);
+  
 };
 
 }  // ngraph_bridge
