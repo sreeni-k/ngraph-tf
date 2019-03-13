@@ -2112,12 +2112,14 @@ static Status TranslateDirectReduceOp(
     const Node* op, const std::vector<const Tensor*>& static_input_map,
     Builder::OpMap& ng_op_map,
     const std::vector<shared_ptr<ng::Node>>& ng_inputs) {
-  // ensure its Any, All, Min, Max or Sum
+  // ensure its Any, All, Min, Max, Sum or Product
   if (!(std::is_same<T, ng::op::Sum>::value ||
+        std::is_same<T, ng::op::Product>::value ||
         std::is_same<T, ng::op::Max>::value ||
         std::is_same<T, ng::op::Min>::value ||
         std::is_base_of<ngraph::op::util::LogicalReduction, T>::value)) {
-    return errors::InvalidArgument("Expected node to be Sum, Any or All type");
+    return errors::InvalidArgument(
+        "Expected node to be Any, All, Min, Max, Sum or Product type");
   }
   return TranslateReduceOp(
       op, static_input_map, ng_op_map, ng_inputs,
@@ -2209,53 +2211,6 @@ static Status TranslatePadOp(
       ng_inputs[0], pad_val_op, padding_below, padding_above, padding_interior);
 
   SaveNgOp(ng_op_map, op->name(), pad_op);
-  return Status::OK();
-}
-
-static Status TranslateProdOp(
-    const Node* op, const std::vector<const Tensor*>& static_input_map,
-    Builder::OpMap& ng_op_map,
-    const std::vector<shared_ptr<ng::Node>>& ng_inputs) {
-  bool tf_keep_dims;
-  if (GetNodeAttr(op->attrs(), "keep_dims", &tf_keep_dims) != Status::OK()) {
-    tf_keep_dims = false;
-  }
-
-  std::vector<int64> prod_axes;
-  TF_RETURN_IF_ERROR(GetStaticInputVector(op, 1, static_input_map, &prod_axes));
-
-  ng::Shape input_shape = ng_inputs[0]->get_shape();
-  size_t input_rank = input_shape.size();
-
-  TF_RETURN_IF_ERROR(CheckAxisDimInRange(prod_axes, input_rank));
-
-  std::vector<size_t> ng_reduction_axes_vect(prod_axes.size());
-  std::transform(
-      prod_axes.begin(), prod_axes.end(), ng_reduction_axes_vect.begin(),
-      [input_rank](int idx) { return idx + (idx < 0 ? (int)input_rank : 0); });
-  ng::AxisSet ng_reduction_axes(ng_reduction_axes_vect);
-
-  std::shared_ptr<ng::Node> ng_prod =
-      make_shared<ng::op::Product>(ng_inputs[0], ng_reduction_axes);
-
-  // If keep_dims is specified we need to reshape to put back the reduced
-  // axes, with length 1.
-  if (tf_keep_dims) {
-    ng::Shape ng_result_shape_with_keep(input_rank);
-
-    for (size_t i = 0; i < input_rank; i++) {
-      ng_result_shape_with_keep[i] =
-          ng_reduction_axes.count(i) == 0 ? input_shape[i] : 1;
-    }
-
-    ng::AxisVector ng_axis_order(ng_prod->get_shape().size());
-    std::iota(ng_axis_order.begin(), ng_axis_order.end(), 0);
-
-    ng_prod = make_shared<ng::op::Reshape>(ng_prod, ng_axis_order,
-                                           ng_result_shape_with_keep);
-  }
-
-  SaveNgOp(ng_op_map, op->name(), ng_prod);
   return Status::OK();
 }
 
@@ -3873,7 +3828,7 @@ const static std::map<
         {"Pow", TranslateBinaryOp<ngraph::op::Power>},
         // PreventGradient is just Identity in data-flow terms, so reuse that.
         {"PreventGradient", TranslateIdentityOp},
-        {"Prod", TranslateProdOp},
+        {"Prod", TranslateDirectReduceOp<ng::op::Product>},
         {"QuantizeAndDequantizeV2", TranslateQuantizeAndDequantizeV2Op},
         {"QuantizedConv2DWithBiasAndReluAndRequantize",
          TranslateQuantizedConv2DWithBiasMaybeReluAndRequantizeOp<true>},
