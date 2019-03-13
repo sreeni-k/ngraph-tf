@@ -32,6 +32,7 @@ message(STATUS "Shared Link Flags: ${CMAKE_SHARED_LINKER_FLAGS}")
 #-----------------------------------------------------------------------------------------------
 set(SRC 
    ngraph_api.cc
+   ngraph_applyGradientDescent_op.cc
    ngraph_assign_clusters.cc
    ngraph_assign_op.cc 
    ngraph_builder.cc

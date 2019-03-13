@@ -47,6 +47,7 @@ Status CaptureVariables(Graph* graph) {
 
   for (auto node : graph->op_nodes()) {
     if (NGraphPlacementRequested(node)) {
+      // Capture VariableV2
       if (node->type_string() == "VariableV2") {
         NGRAPH_VLOG(1) << "Capturing: " << node->name();
 
@@ -109,8 +110,8 @@ Status CaptureVariables(Graph* graph) {
         }
 
         replaced_nodes.push_back(node);
-      }
-
+      } // end of capturing VariableV2
+      // capturing Assign op
       else if (node->type_string() == "Assign") {
         NGRAPH_VLOG(1) << "Capturing: " << node->name();
 
@@ -174,9 +175,72 @@ Status CaptureVariables(Graph* graph) {
 
         replaced_nodes.push_back(node);
         NGRAPH_VLOG(1) << "Replaced";
-      }
-    }
-  }
+      }// end of capturing Assign op
+      // capturing ApplyGradientDescent op
+      else if (node->type_string() == "ApplyGradientDescent") {
+        cout << "Mingshan capture AGD" << endl;
+        NGRAPH_VLOG(1) << "Capturing: " << node->name();
+
+        DataType dtype;
+        TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "T", &dtype));
+        bool use_locking;
+        TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "use_locking", &use_locking));
+
+        NodeBuilder::NodeOut input_var;
+        NodeBuilder::NodeOut input_alpha;
+        NodeBuilder::NodeOut input_delta;
+    
+        // input_edges hold the input data edges of this Node, indexed by input
+        // number. Does not include control_edges
+        // TODO(Mingshan): we may removing the control_edges to the ApplyGradientDescent node
+        std::vector<const Edge*> input_edges;
+        TF_RETURN_IF_ERROR(node->input_edges(&input_edges));
+
+        input_var = NodeBuilder::NodeOut(input_edges[0]->src(), input_edges[0]->src_output());
+        input_alpha = NodeBuilder::NodeOut(input_edges[1]->src(), input_edges[1]->src_output());
+        input_delta = NodeBuilder::NodeOut(input_edges[2]->src(), input_edges[2]->src_output());
+
+        Node* replacement;
+        // TODO(amprocte): Do we need to copy "_" attributes?
+        TF_RETURN_IF_ERROR(NodeBuilder(node->name(), "NGraphApplyGradientDescent")
+                               .Attr("T", dtype)
+                               .Attr("use_locking", use_locking)
+                               .Attr("ngraph_graph_id", 0)
+                               .Input(input_var)
+                               .Input(input_alpha)
+                               .Input(input_delta)
+                               .Device(node->assigned_device_name())
+                               .Finalize(graph, &replacement));
+
+        NGRAPH_VLOG(1) << "Successfully constructed NGraphApplyGradientDescent Node Def";
+
+        replacement->set_assigned_device_name(node->assigned_device_name());
+
+        std::vector<const Edge*> edges;
+
+        // Add edge from the input nodes (to the ApplyGradientDescent node)
+        // to the replacement node (NGraphApplyGradientDescent)
+        NGRAPH_VLOG(4) << "Replacing Node " << node->DebugString() << " with "
+                       << replacement->DebugString();
+
+        NGRAPH_VLOG(4) << "Getting out edges: ";
+        for (auto edge : node->out_edges()) {
+          edges.push_back(edge);
+        }
+        NGRAPH_VLOG(4) << "Got out edges: ";
+
+        for (auto edge : edges) {
+          NGRAPH_VLOG(4) << "Replacing: " << edge->DebugString();
+          graph->AddEdge(replacement, edge->src_output(), edge->dst(),
+                         edge->dst_input());
+          graph->RemoveEdge(edge);
+        }
+
+        replaced_nodes.push_back(node);
+        NGRAPH_VLOG(1) << "Replaced ApplyGradientDescent with NGraphApplyGradientDescent";
+      }// end of capturing ApplyGradientDescent op
+    }// end of checking NGraphPlacementRequested
+  }// end of looping through nodes in the graph
 
   for (auto node : replaced_nodes) {
     NGRAPH_VLOG(4) << "Removing: " << node->name();
