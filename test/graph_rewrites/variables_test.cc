@@ -76,7 +76,7 @@ TEST(Variables, SmallGraph1) {
       &ng_outputs1));
   std::cout << "initialize var: " << ng_outputs1[0].matrix<float>()
             << std::endl;
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 2; i++) {
     ASSERT_OK(ng_session.Run({assign}, &ng_outputs2));
     // Print the output
     std::cout << "itr: " << i << " ,Result: " << ng_outputs2[0].matrix<float>()
@@ -100,7 +100,7 @@ TEST(Variables, SmallGraph1) {
       &tf_outputs1));
   std::cout << "initialize var: " << tf_outputs1[0].matrix<float>()
             << std::endl;
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 2; i++) {
     ASSERT_OK(tf_session.Run({assign}, &tf_outputs2));
     // Print the output
     std::cout << "itr: " << i << " ,Result: " << tf_outputs2[0].matrix<float>()
@@ -128,11 +128,11 @@ TEST(Variables, SmallGraph2) {
 
   auto add = ops::Add(root.WithOpName("Add1"), var, c);
 
-  auto assign = ops::Assign(root, var, add);
+  auto assign = ops::AssignSub(root, var, add);
 
   auto add2 = ops::Add(root.WithOpName("Add2"), assign, c);
 
-  auto assign2 = ops::Assign(root, var, add2);
+  auto assign2 = ops::AssignSub(root, var, add2);
 
   // Turn off optimizations so that all the nodes are processed
   tensorflow::SessionOptions options;
