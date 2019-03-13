@@ -26,6 +26,7 @@
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 
 #include "ngraph/runtime/backend.hpp"
+#include "ngraph/shape.hpp"
 #include "ngraph_backend_manager.h"
 #include "ngraph_catalog.h"
 #include "ngraph_freshness_tracker.h"
@@ -33,6 +34,7 @@
 #include "ngraph_var.h"
 
 using namespace std;
+// using namespace ngraph;
 namespace ng = ngraph;
 
 namespace tensorflow {
@@ -54,28 +56,26 @@ class NGraphApplyGradientDescentOp : public OpKernel {
  public:
   explicit NGraphApplyGradientDescentOp(OpKernelConstruction* context)
       : OpKernel(context), just_looking_(false), copy_to_tf_(false) {
-
     OP_REQUIRES_OK(context, context->GetAttr("just_looking", &just_looking_));
     OP_REQUIRES_OK(context, context->GetAttr("copy_to_tf", &copy_to_tf_));
     OP_REQUIRES_OK(context, context->GetAttr("ngraph_graph_id", &ng_graph_id_));
 
-
     OP_REQUIRES(context, IsRefType(context->input_type(0)),
-                errors::InvalidArgument("The first input must be a ref type for NGraphApplyGraidenteDescent"));
+                errors::InvalidArgument("The first input must be a ref type "
+                                        "for NGraphApplyGraidenteDescent"));
 
     NGRAPH_VLOG(1) << "Constructing NGraphApplyGradientDescent " << def().name()
                    << ": just looking? " << just_looking_ << " ,copy-to-tf "
                    << copy_to_tf_;
-
   }
 
   void Compute(OpKernelContext* context) override {
     NGRAPH_VLOG(1) << "In NGraphApplyGradientDescent Compute";
     NGRAPH_VLOG(1) << "Copy to TF " << PrintBool(copy_to_tf_);
     NGRAPH_VLOG(1) << "Just Looking " << PrintBool(just_looking_);
-    
 
-    // Get the 1st input ref from input_catelog (NGraphVar -> NGraphApplyGraidentDescent)
+    // Get the 1st input ref from input_catelog (NGraphVar ->
+    // NGraphApplyGraidentDescent)
     bool ref_exists =
         NGraphCatalog::ExistsInCatalog(ng_graph_id_, def().name(), 0);
     if (!ref_exists) {
@@ -97,110 +97,163 @@ class NGraphApplyGradientDescentOp : public OpKernel {
 
     // get the nGraphTensor
     shared_ptr<ngraph::runtime::Tensor> ng_tensor_to_assign = var->ng_tensor();
-    
-    unordered_map<int, shared_ptr<ng::runtime::Tensor>> input_to_ng_tensor_map; 
+
+    unordered_map<int, shared_ptr<ng::runtime::Tensor>> input_to_ng_tensor_map;
+    // Create Backend
+    std::string ng_backend_name_ = "CPU";
+    BackendManager::CreateBackend(ng_backend_name_);
+    ng::runtime::Backend* op_backend =
+        BackendManager::GetBackend(ng_backend_name_);
 
     // Check for the two other inputs for NGraphApplyGraidenetDescent
     // if they are coming from NGraphEncapsulates
-    for(int i = 1; i < 3; i++){
+    for (int i = 1; i < 3; i++) {
       string valkey = to_string(ng_graph_id_) + "_" + def().input(i);
       NGRAPH_VLOG(1) << "NGraphAGD input " << i << " with key " << valkey;
 
       // checking in output catelog
       bool valref_exists = NGraphCatalog::ExistsInOutputCatalog(valkey);
 
-      if(valref_exists){
-      // Value is from encap
-        NGRAPH_VLOG(1)<<"Directly assigning from : " << valkey;
+      if (valref_exists) {
+        // Value is from encap
+        NGRAPH_VLOG(1) << "Directly assigning from : " << valkey;
         auto ng_val = NGraphCatalog::GetNgTensorFromOutputCatalog(valkey);
-        NGRAPH_VLOG(1)<<"Got tensor " << valkey << " "<< ng_val;
-        NGRAPH_VLOG(1)<<"Is null " << ((ng_val==NULL) ? "Yes" : "No");
+        NGRAPH_VLOG(1) << "Got tensor " << valkey << " " << ng_val;
+        NGRAPH_VLOG(1) << "Is null " << ((ng_val == NULL) ? "Yes" : "No");
         input_to_ng_tensor_map[i] = ng_val;
-        NGRAPH_VLOG(1) << "Insert ng_tensor input " << i << "in input_to_ng_tensor_map ";
-        //ng_tensor_to_assign->copy_from(*ng_val);
-      } else{
-          NGRAPH_VLOG(1)<<"Getting from TF : " << valkey;
-          const Tensor& rhs = context->input(i);
-          void* tf_src_ptr = (void*)DMAHelper::base(&rhs);
-          
-          // TF datatype to nGraph element type
-          DataType dtype = rhs.dtype();
-          ng::element::Type ng_element_type;
-          TFDataTypeToNGraphElementType(dtype, &ng_element_type);
+        NGRAPH_VLOG(1) << "Insert ng_tensor input " << i
+                       << "in input_to_ng_tensor_map ";
+        // ng_tensor_to_assign->copy_from(*ng_val);
+      } else {
+        NGRAPH_VLOG(1) << "Getting from TF : " << valkey;
+        const Tensor& rhs = context->input(i);
+        void* tf_src_ptr = (void*)DMAHelper::base(&rhs);
 
-          TensorShape shape = rhs.shape();
-          // TF TensorShape to nGraphShape
-            ng::Shape ng_shape(shape.dims());
-            for (int j = 0; j < shape.dims(); ++j) {
-              ng_shape[j] = shape.dim_size(j);
-          }
-         
-          // Create Backend
-          std::string ng_backend_name_ = "CPU";
-          BackendManager::CreateBackend(ng_backend_name_);
-          ng::runtime::Backend* op_backend =
-                BackendManager::GetBackend(ng_backend_name_);
+        // TF datatype to nGraph element type
+        DataType dtype = rhs.dtype();
+        ng::element::Type ng_element_type;
+        TFDataTypeToNGraphElementType(dtype, &ng_element_type);
 
-          //Create nGTensor
-          auto ng_tensor = op_backend->create_tensor(ng_element_type, ng_shape);
-          NGRAPH_VLOG(1) << "Constructed ng tensor ";
-          ng_tensor->write(
-              tf_src_ptr, 0, ng_tensor->get_element_count() *
-                                ng_tensor->get_element_type().size());
-          NGRAPH_VLOG(1) << "Getting the values from TF tensor to NG tensor ";
-          input_to_ng_tensor_map[i] = ng_tensor;
-          NGRAPH_VLOG(1) << "Insert ng_tensor input " << i << "in input_to_ng_tensor_map ";
+        TensorShape shape = rhs.shape();
+        // TF TensorShape to nGraphShape
+        ng::Shape ng_shape(shape.dims());
+        for (int j = 0; j < shape.dims(); ++j) {
+          ng_shape[j] = shape.dim_size(j);
+        }
+
+        // Create nGTensor
+        auto ng_tensor = op_backend->create_tensor(ng_element_type, ng_shape);
+        NGRAPH_VLOG(1) << "Constructed ng tensor ";
+        ng_tensor->write(tf_src_ptr, 0,
+                         ng_tensor->get_element_count() *
+                             ng_tensor->get_element_type().size());
+        NGRAPH_VLOG(1) << "Getting the values from TF tensor to NG tensor ";
+        input_to_ng_tensor_map[i] = ng_tensor;
+        NGRAPH_VLOG(1) << "Insert ng_tensor input " << i
+                       << "in input_to_ng_tensor_map ";
       }
-    } // end of getting inputs for NGraphApplyGradientDescent
+    }  // end of getting inputs for NGraphApplyGradientDescent
 
     NGRAPH_VLOG(1) << "Size should be 2 " << input_to_ng_tensor_map.size();
+    if (input_to_ng_tensor_map.size() < 2) {
+      OP_REQUIRES(context, input_to_ng_tensor_map.size(),
+                  errors::Internal("Caught exception : Missing inputs to  "
+                                   "NGraphApplyGradientDescent \n"));
+    }
+
     // do the computation
-    
-    //setting the output
+    // Build the graph for var - (alpha * delta)
+    auto var_param = std::make_shared<ng::op::Parameter>(
+        ng_tensor_to_assign->get_element_type(),
+        ng_tensor_to_assign->get_shape());
+    cout << ng_tensor_to_assign->get_shape() << endl;
+    auto alpha_param = std::make_shared<ng::op::Parameter>(
+        input_to_ng_tensor_map[1]->get_element_type(),
+        input_to_ng_tensor_map[1]->get_shape());
+    cout << input_to_ng_tensor_map[1]->get_shape() << endl;
+    auto delta_param = std::make_shared<ng::op::Parameter>(
+        input_to_ng_tensor_map[2]->get_element_type(),
+        input_to_ng_tensor_map[2]->get_shape());
+    cout << input_to_ng_tensor_map[2]->get_shape() << endl;
+    NGRAPH_VLOG(1) << "Constructed the parameters for the graph";
 
-  
-    // // We always return the input ref.
-    // context->forward_ref_input_to_ref_output(0, 0);
+    std::shared_ptr<ng::Node> ng_alpha_param, ng_delta_param;
+    std::tie(ng_alpha_param, ng_delta_param) =
+        ng::builder::numpy_broadcast(std::make_pair(alpha_param, delta_param));
 
-    // // DO NOT CARE ABOUT SYNCING AS WE ARE ALWAYS SETTING THE NGTENSOR
+    auto t0 =
+        std::make_shared<ng::op::Multiply>(ng_alpha_param, ng_delta_param);
+    auto t1 = std::make_shared<ng::op::Subtract>(var_param, t0);
 
-  
-    // NGRAPH_VLOG(1) << " Print NG Tensor ";
-    // // PrintNGTensor(ng_tensor_to_assign);
+    auto ng_function = std::make_shared<ng::Function>(
+        ng::NodeVector{t1},
+        ng::ParameterVector{var_param, alpha_param, delta_param});
+    NGRAPH_VLOG(1) << "Constructed ApplyGradientDescent ng_function ";
 
-    // mutex_lock l(*context->input_ref_mutex(0));
-    // Tensor old_lhs = context->mutable_input(0, /* lock_held */ true);
+    // Compile Function to get executable
+    auto ng_exec = op_backend->compile(ng_function);
+    NGRAPH_VLOG(1) << "Compiled ApplyGradientDescent ng_function ";
+
+    // Create Output Tensor Vector
+    std::vector<shared_ptr<ng::runtime::Tensor>> ng_outputs;
+    for (auto i = 0; i < ng_exec->get_results().size(); i++) {
+      auto ng_element = ng_exec->get_results()[i];
+      auto ng_shape = ng_element->get_shape();
+      auto ng_element_type = ng_element->get_element_type();
+
+      auto ng_op = op_backend->create_tensor(ng_element_type, ng_shape);
+      ng_outputs.push_back(ng_op);
+    }
+
+    // Create Input Tensor Vector
+    vector<shared_ptr<ng::runtime::Tensor>> ng_inputs = {
+        ng_tensor_to_assign, input_to_ng_tensor_map[1],
+        input_to_ng_tensor_map[2]};
+
+    // Call Executable
+    ng_exec->call(ng_outputs, ng_inputs);
+    NGRAPH_VLOG(1) << "Finished calling the compiled executable ";
+
+    // Assign to the variable
+    ng_tensor_to_assign->copy_from(*ng_outputs[0]);
+    NGRAPH_VLOG(1) << "Print updated tensor value after ApplyGradientDescent";
+    PrintNGTensor(ng_tensor_to_assign);
+
+    // Set the output
+    context->forward_ref_input_to_ref_output(0, 0);
+
+    // CARE ABOUT SYNCING HERE SINCE WE ARE USING NGVariable result
+
+    mutex_lock l(*context->input_ref_mutex(0));
+    Tensor old_lhs = context->mutable_input(0, /* lock_held */ true);
 
     // NGRAPH_VLOG(1) << " Print TF Tensor ";
-    // // PrintTFTensor(old_lhs);
+    // PrintTFTensor(old_lhs);
 
-    // if (copy_to_tf_) {
-    //   // update the tf tensor
-    //   // mutex_lock l(*context->input_ref_mutex(0));
-    //   // const Tensor& old_lhs = context->mutable_input(0, /* lock_held */
-    //   // true);
-    //   // Tensor old_lhs = context->mutable_input(0, /* lock_held */ true);
-    //   ReadNGTensor(ng_tensor_to_assign, &old_lhs);
-    //   NGRAPH_VLOG(1) << "Copying to TF Tensor";
-    //   NGRAPH_VLOG(1) << "Print ng-tensor";
-    //   PrintNGTensor(ng_tensor_to_assign);
+    // Update the tf tensor alsoe
+    if (copy_to_tf_) {
+      ReadNGTensor(ng_tensor_to_assign, &old_lhs);
+      NGRAPH_VLOG(1) << "Copying to TF Tensor";
+      NGRAPH_VLOG(1) << "Print ng-tensor";
+      PrintNGTensor(ng_tensor_to_assign);
 
-    //   NGRAPH_VLOG(1) << "Print tf-tensor";
-    //   PrintTFTensor(old_lhs);
+      NGRAPH_VLOG(1) << "Print tf-tensor";
+      PrintTFTensor(old_lhs);
 
-    //   if (just_looking_) {
-    //     // Some tf op will just use the val
+      if (just_looking_) {
+        // Some tf op will just use the val
 
-    //   } else {
-    //     // Some tf op might update the ng-tensor value so mark it stale
-    //     var->sync_ng_tensor(true);
-    //   }
-    // }
+      } else {
+        // Some tf op might update the ng-tensor value so mark it stale
+        var->sync_ng_tensor(true);
+      }
+    }
 
-    // // Unref Var
-    // var->Unref();
-  }
-};
+    // Unref Var
+    var->Unref();
+
+  }  // end of compute function
+};   // end of NGraphApplyGradientDescent class definition
 
 REGISTER_OP("NGraphApplyGradientDescent")
     .Input("var: Ref(T)")

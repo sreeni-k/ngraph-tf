@@ -222,7 +222,7 @@ Status RewriteForTracking(Graph* graph) {
           break;
         }
       }
-      
+
       // If any of the nodes reading from this Variable node read the data as
       // reference then we dont track it, else we do
       for (auto edge : node->out_edges()) {

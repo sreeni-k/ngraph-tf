@@ -74,7 +74,7 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
       NGRAPH_VLOG(1) << "Key: " << node_key;
       NGRAPH_VLOG(1) << "Value: " << shared_name;
 
-      if(node->type_string() == "NGraphApplyGradientDescent"){
+      if (node->type_string() == "NGraphApplyGradientDescent") {
         cout << "Mingshan enter catelog for NGraphApplyGD" << endl;
         cout << "Mingshan key " << node_key << endl;
         cout << "Mingshan value " << shared_name << endl;
@@ -112,10 +112,11 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
       NGraphCatalog::AddEncapCopyOutputCatalog(node->name(), op_index_to_copy);
 
       add_graph_id.push_back(node);
-    } // end of node is type NGraphEncapsulate
+    }  // end of node is type NGraphEncapsulate
 
     // Update the output tensor map
-    if (node->type_string() == "NGraphAssign" || node->type_string() == "NGraphApplyGradientDescent") {
+    if (node->type_string() == "NGraphAssign" ||
+        node->type_string() == "NGraphApplyGradientDescent") {
       for (auto edge : node->in_edges()) {
         if (!edge->src()->IsOp() || edge->IsControlEdge() ||
             IsRefType(edge->dst()->input_type(edge->dst_input())) ||
@@ -123,7 +124,8 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
           continue;
         }
 
-        NGRAPH_VLOG(1) << "Get " << node->type_string() << "and input is from NGraphEncapsulate";
+        NGRAPH_VLOG(1) << "Get " << node->type_string()
+                       << "and input is from NGraphEncapsulate";
 
         auto src = edge->src();
         int src_output = edge->src_output();
@@ -139,14 +141,13 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
         NGRAPH_VLOG(1) << "Adding in output Catalog ";
         NGRAPH_VLOG(1) << "Key: " << node_key;
 
-         if(node->type_string() == "NGraphApplyGradientDescent"){
-            cout << "Mingshan enter output catelog for NGraphApplyGD" << endl;
-            cout << "Mingshan key " << node_key << endl;
-         }
-
+        if (node->type_string() == "NGraphApplyGradientDescent") {
+          cout << "Mingshan enter output catelog for NGraphApplyGD" << endl;
+          cout << "Mingshan key " << node_key << endl;
+        }
       }
-    } // end of if node of type NGraphAssign
-  }  // enter in catalog
+    }  // end of if node of type NGraphAssign
+  }    // enter in catalog
 
   for (auto node : add_graph_id) {
     node->AddAttr("ngraph_graph_id", graph_id);
