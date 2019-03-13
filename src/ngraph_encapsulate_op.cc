@@ -160,6 +160,23 @@ class NGraphEncapsulateOp : public OpKernel {
       // seems to screw things up in the C++ unit tests.
       // m_freshness_tracker->Unref();
 
+      //Delete the [Could be erroreneous we dont know if this destructor is called at the very end]
+      string node_name = "_ngraph_cluster_" + to_string(m_ngraph_cluster);
+      
+      for(int i=0 ; i<m_number_outputs; i++){
+        string key;
+        if(i==0){
+          key = to_string(m_graph_id) + node_name;
+        }
+        else{
+          key = NGraphCatalog::CreateNodeKey(m_graph_id,node_name, i);
+        } 
+        bool ref_exists = NGraphCatalog::ExistsInOutputCatalog(key);
+        if(ref_exists){
+          NGraphCatalog::DeleteTensorFromEncapOutputCatalog(key);
+        }
+      }
+
       // Release the backend
       BackendManager::ReleaseBackend(m_op_backend_name);
       NGRAPH_VLOG(2) << "~NGraphEncapsulateOp()";
@@ -638,6 +655,11 @@ class NGraphEncapsulateOp : public OpKernel {
     Timer copy_output_tensors_to_host;
 
     try {
+
+      if(m_number_outputs==-1){
+        NGRAPH_VLOG(1) << "Settig number of outputs for "<< def().name();
+        m_number_outputs=output_caches.size();
+      }
       for (size_t i = 0; i < output_caches.size(); ++i) {
         string key;
         if(i==0){
@@ -787,6 +809,7 @@ class NGraphEncapsulateOp : public OpKernel {
   int my_function_cache_depth_in_items = 16;
   static int s_instance_count;
   int my_instance_id{0};
+  int m_number_outputs = -1;
 };
 
 int NGraphEncapsulateOp::s_instance_count = 0;

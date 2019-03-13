@@ -35,6 +35,9 @@ void NGraphCatalog::AddEncapCopyOutputCatalog(string key, unordered_set<int> val
   NGraphCatalog::ng_encap_output_copy_map_[key] = val;
 }
 
+unordered_set<int> NGraphCatalog::GetEncapOutputIndexesNeedsCopy(string key){
+  return NGraphCatalog::ng_encap_output_copy_map_[key];
+}
 
 bool NGraphCatalog::EncapOutputNeedsCopy(string key, int index){
   auto itr = NGraphCatalog::ng_encap_output_copy_map_.find(key);
@@ -73,6 +76,9 @@ shared_ptr<ng::runtime::Tensor> NGraphCatalog::GetNgTensorFromOutputCatalog(stri
   return NGraphCatalog::output_tensor_map_[key];
 }
 
+void NGraphCatalog::DeleteTensorFromEncapOutputCatalog(string key){
+  NGraphCatalog::output_tensor_map_.erase(key);
+}
 
 string NGraphCatalog::GetInputSharedName(int graphid, string node_name,
                                          int input_index) {
