@@ -62,7 +62,8 @@ std::string DebugNode(Node* node) {
 std::string PrintBool(bool var) { return (var ? "Yes" : "No"); }
 
 bool IsNGVariableType(string node_type) {
-  return (node_type == "NGraphVariable" || node_type == "NGraphAssign");
+  return (node_type == "NGraphVariable" || node_type == "NGraphAssign" ||
+          node_type == "NGraphApplyGradientDescent");
 }
 
 void ReadNGTensor(shared_ptr<ng::runtime::Tensor> ng_tensor,

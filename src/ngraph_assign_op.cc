@@ -108,23 +108,21 @@ class NGraphAssignOp : public OpKernel {
 
     // DO NOT CARE ABOUT SYNCING AS WE ARE ALWAYS SETTING THE NGTENSOR
 
-    
     string valkey = to_string(ng_graph_id_) + "_" + def().input(1);
     bool valref_exists = NGraphCatalog::ExistsInOutputCatalog(valkey);
-    if(valref_exists){
-     // Value is from encap
-      NGRAPH_VLOG(1)<<"Directly assigning from : " <<valkey;
+    if (valref_exists) {
+      // Value is from encap
+      NGRAPH_VLOG(1) << "Directly assigning from : " << valkey;
       auto ng_val = NGraphCatalog::GetNgTensorFromOutputCatalog(valkey);
-      NGRAPH_VLOG(1)<<"Got tensor " <<valkey << " "<<ng_val;
-      NGRAPH_VLOG(1)<<"Is null " << ((ng_val==NULL) ? "Yes" : "No");
+      NGRAPH_VLOG(1) << "Got tensor " << valkey << " " << ng_val;
+      NGRAPH_VLOG(1) << "Is null " << ((ng_val == NULL) ? "Yes" : "No");
       ng_tensor_to_assign->copy_from(*ng_val);
-    }
-    else{
-    NGRAPH_VLOG(1)<<"Getting from TF : " <<valkey;
-    void* tf_src_ptr = (void*)DMAHelper::base(&rhs);
-    ng_tensor_to_assign->write(
-        tf_src_ptr, 0, ng_tensor_to_assign->get_element_count() *
-                           ng_tensor_to_assign->get_element_type().size());
+    } else {
+      NGRAPH_VLOG(1) << "Getting from TF : " << valkey;
+      void* tf_src_ptr = (void*)DMAHelper::base(&rhs);
+      ng_tensor_to_assign->write(
+          tf_src_ptr, 0, ng_tensor_to_assign->get_element_count() *
+                             ng_tensor_to_assign->get_element_type().size());
     }
 
     NGRAPH_VLOG(1) << " Print NG Tensor ";

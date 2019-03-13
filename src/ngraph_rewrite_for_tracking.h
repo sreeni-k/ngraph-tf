@@ -29,6 +29,11 @@ Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
 Status ReplaceNGraphVariable(Graph* graph, Node* node, Node** replacement,
                              std::string node_new_name, bool just_looking,
                              bool outputs_ng_supported);
+Status ReplaceNGraphApplyGradientDescent(Graph* graph, Node* node,
+                                         Node** replacement,
+                                         std::string node_new_name,
+                                         bool just_looking,
+                                         bool outputs_ng_supported);
 }  // namespace ngraph_bridge
 
 }  // namespace tensorflow

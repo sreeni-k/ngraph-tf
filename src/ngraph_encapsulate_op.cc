@@ -637,30 +637,35 @@ class NGraphEncapsulateOp : public OpKernel {
     try {
       for (size_t i = 0; i < output_caches.size(); ++i) {
         string key;
-        if(i==0){
-          key = to_string(m_graph_id) +"_" + def().name();
-        }
-        else{
+        if (i == 0) {
+          key = to_string(m_graph_id) + "_" + def().name();
+        } else {
           key = NGraphCatalog::CreateNodeKey(m_graph_id, def().name(), i);
-        } 
+        }
         bool ref_exists = NGraphCatalog::ExistsInOutputCatalog(key);
         void* dst_ptr;
         std::shared_ptr<ng::runtime::Tensor> dst_tv;
         std::tie(dst_ptr, dst_tv) = output_caches[i];
 
-        NGRAPH_VLOG(1)<<" Found Output key "<< key << dst_tv ;
-        if(ref_exists){          
-          NGRAPH_VLOG(1)<<" Saving output "<< key << dst_tv ;
+        NGRAPH_VLOG(1) << " Found Output key " << key << dst_tv;
+        if (ref_exists) {
+          NGRAPH_VLOG(1) << " Saving output " << key << dst_tv;
           NGraphCatalog::AddOutputCatalog(key, dst_tv);
         }
-        NGRAPH_VLOG(1) << "Is Output Copy required for "<< def().name() <<" ,index: " << i <<" "<<PrintBool(NGraphCatalog::EncapOutputNeedsCopy(def().name(), i));
-        if(m_op_backend_name != "CPU" && NGraphCatalog::EncapOutputNeedsCopy(def().name(), i)){
-          NGRAPH_VLOG(1) << "Copying Op required for "<< def().name() <<" ,index: " <<i;
-        auto ng_element_type = dst_tv->get_element_type();
-        //TODO: if the output is required by only other ng-encapsulates or ng-variable types then
-        // we dont need the copy 
-        dst_tv->read(dst_ptr, 0,
-                      dst_tv->get_element_count() * ng_element_type.size());
+        NGRAPH_VLOG(1) << "Is Output Copy required for " << def().name()
+                       << " ,index: " << i << " "
+                       << PrintBool(NGraphCatalog::EncapOutputNeedsCopy(
+                              def().name(), i));
+        if (m_op_backend_name != "CPU" &&
+            NGraphCatalog::EncapOutputNeedsCopy(def().name(), i)) {
+          NGRAPH_VLOG(1) << "Copying Op required for " << def().name()
+                         << " ,index: " << i;
+          auto ng_element_type = dst_tv->get_element_type();
+          // TODO: if the output is required by only other ng-encapsulates or
+          // ng-variable types then
+          // we dont need the copy
+          dst_tv->read(dst_ptr, 0,
+                       dst_tv->get_element_count() * ng_element_type.size());
         }
       }
     } catch (const std::exception& exp) {

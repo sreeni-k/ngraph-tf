@@ -51,11 +51,9 @@ class NGraphApplyGradientDescentOp : public OpKernel {
   bool copy_to_tf_;
   int ng_graph_id_;
 
-
  public:
   explicit NGraphApplyGradientDescentOp(OpKernelConstruction* context)
       : OpKernel(context), just_looking_(false), copy_to_tf_(false) {
-
     OP_REQUIRES_OK(context, context->GetAttr("just_looking", &just_looking_));
     OP_REQUIRES_OK(context, context->GetAttr("copy_to_tf", &copy_to_tf_));
     OP_REQUIRES_OK(context, context->GetAttr("ngraph_graph_id", &ng_graph_id_));
@@ -77,8 +75,8 @@ class NGraphApplyGradientDescentOp : public OpKernel {
         NGraphCatalog::ExistsInCatalog(ng_graph_id_, def().name(), 0);
     if (!ref_exists) {
       OP_REQUIRES(context, ref_exists,
-                  errors::Internal(
-                      "Caught exception : RefInput to NGraphApplyGradientDescent not found \n"));
+                  errors::Internal("Caught exception : RefInput to "
+                                   "NGraphApplyGradientDescent not found \n"));
     }
     string get_ref_var_name =
         NGraphCatalog::GetInputSharedName(ng_graph_id_, def().name(), 0);
@@ -97,11 +95,11 @@ class NGraphApplyGradientDescentOp : public OpKernel {
     // context->forward_ref_input_to_ref_output(0, 0);
 
     // // get the nGraphTensor
-    // shared_ptr<ngraph::runtime::Tensor> ng_tensor_to_assign = var->ng_tensor();
+    // shared_ptr<ngraph::runtime::Tensor> ng_tensor_to_assign =
+    // var->ng_tensor();
 
     // // DO NOT CARE ABOUT SYNCING AS WE ARE ALWAYS SETTING THE NGTENSOR
 
-    
     // string valkey = to_string(ng_graph_id_) + "_" + def().input(1);
     // bool valref_exists = NGraphCatalog::ExistsInOutputCatalog(valkey);
     // if(valref_exists){

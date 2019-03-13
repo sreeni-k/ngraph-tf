@@ -137,22 +137,80 @@ Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
   return Status::OK();
 }
 
+// ReplaceNGraphApplyGradientDescent
+Status ReplaceNGraphApplyGradientDescent(Graph* graph, Node* node,
+                                         Node** replacement,
+                                         std::string node_new_name,
+                                         bool just_looking,
+                                         bool outputs_ng_supported) {
+  NGRAPH_VLOG(1) << "Start replacing NGraphApplyGradientDescent "
+                 << node->name();
+
+  DataType dtype;
+  TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "T", &dtype));
+  bool use_locking;
+  TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "use_locking", &use_locking));
+  int graph_id;
+  TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "ngraph_graph_id", &graph_id));
+  std::string backend_name;
+  TF_RETURN_IF_ERROR(
+      GetNodeAttr(node->attrs(), "_ngraph_backend", &backend_name));
+
+  NodeBuilder::NodeOut input_var;
+  NodeBuilder::NodeOut input_alpha;
+  NodeBuilder::NodeOut input_delta;
+
+  // TODO(Mingshan): we may removing the control_edges to the
+  // ApplyGradientDescent node
+  std::vector<const Edge*> input_edges;
+  TF_RETURN_IF_ERROR(node->input_edges(&input_edges));
+
+  NGRAPH_VLOG(1) << "No of input edges to ApplyGradientDescent "
+                 << input_edges.size();
+
+  input_var =
+      NodeBuilder::NodeOut(input_edges[0]->src(), input_edges[0]->src_output());
+  input_alpha =
+      NodeBuilder::NodeOut(input_edges[1]->src(), input_edges[1]->src_output());
+  input_delta =
+      NodeBuilder::NodeOut(input_edges[2]->src(), input_edges[2]->src_output());
+
+  TF_RETURN_IF_ERROR(NodeBuilder(node->name(), "NGraphApplyGradientDescent")
+                         .Attr("T", dtype)
+                         .Attr("use_locking", use_locking)
+                         .Attr("just_looking", just_looking)
+                         .Attr("copy_to_tf", !outputs_ng_supported)
+                         .Attr("ngraph_graph_id", graph_id)
+                         .Attr("_ngraph_backend", backend_name)
+                         .Input(input_var)
+                         .Input(input_alpha)
+                         .Input(input_delta)
+                         .Device(node->assigned_device_name())
+                         .Finalize(graph, &(*replacement)));
+
+  (*replacement)->set_assigned_device_name(node->assigned_device_name());
+  return Status::OK();
+}  // end of ReplaceNGraphApplyGradientDescent
+
 //
 // Main entry point for rewrite-for-tracking.
 //
 Status RewriteForTracking(Graph* graph) {
   std::vector<Node*> replaced_nodes;
   std::set<string> ng_supported_ops = {"NGraphVariable", "NGraphAssign",
-                                       "NGraphEncapsulate"};
+                                       "NGraphEncapsulate",
+                                       "NGraphApplyGradientDescent"};
 
   for (auto node : graph->op_nodes()) {
     if (node->type_string() == "NGraphVariable" ||
-        node->type_string() == "NGraphAssign") {
-      NGRAPH_VLOG(1) << "Checking: " << DebugNode(node) << " " << node->name();
+        node->type_string() == "NGraphAssign" ||
+        node->type_string() == "NGraphApplyGradientDescent") {
+      NGRAPH_VLOG(1) << "Checking: " << DebugNode(node);
 
       bool just_looking = true;
       bool outputs_ng_supported = true;
 
+      // Check if all the outputs of this node ngraph supports
       for (auto edge : node->out_edges()) {
         auto dst = edge->dst();
         NGRAPH_VLOG(1) << "dst node " << DebugNode(dst);
@@ -170,7 +228,13 @@ Status RewriteForTracking(Graph* graph) {
       for (auto edge : node->out_edges()) {
         if (edge->dst()->IsOp() && !edge->IsControlEdge() &&
             IsRefType(edge->dst()->input_type(edge->dst_input()))) {
+          // if the output reference is read by NGraph supported ops, do not
+          // turn off just_looking
+          // NGVariableType = NGVariable || NGraphAssign ||
+          // NGraphApplyGradientDescent
           if (!IsNGVariableType(edge->dst()->type_string())) {
+            NGRAPH_VLOG(1) << DebugNode(edge->dst())
+                           << "needs reference, setting just_looking to false";
             just_looking = false;
             break;
           }
@@ -199,12 +263,17 @@ Status RewriteForTracking(Graph* graph) {
                        << node_new_name;
 
         // TODO(amprocte): Do we need to copy "_" attributes?
+        // TODO(mingshan): Combine this three to one helper function
         if (node->type_string() == "NGraphVariable") {
           ReplaceNGraphVariable(graph, node, &replacement, node_new_name,
                                 just_looking, outputs_ng_supported);
         } else if (node->type_string() == "NGraphAssign") {
           ReplaceNGraphAssign(graph, node, &replacement, node_new_name,
                               just_looking, outputs_ng_supported);
+        } else if (node->type_string() == "NGraphApplyGradientDescent") {
+          ReplaceNGraphApplyGradientDescent(graph, node, &replacement,
+                                            node_new_name, just_looking,
+                                            outputs_ng_supported);
         }
 
         std::vector<const Edge*> edges;
@@ -217,6 +286,7 @@ Status RewriteForTracking(Graph* graph) {
                          edge->dst_input());
           graph->RemoveEdge(edge);
         }
+        NGRAPH_VLOG(1) << "Replaced " << edges.size() << " of output edges ";
 
         replaced_nodes.push_back(node);
       } else {
@@ -225,7 +295,7 @@ Status RewriteForTracking(Graph* graph) {
             << node->name();
       }
     }
-  }
+  }  // end of looping through the nodes in the graph
   for (auto node : replaced_nodes) {
     graph->RemoveNode(node);
   }
