@@ -51,7 +51,8 @@ class GraphCatalog {
   // Map of
   // Key string : nodename + _ + input_index
   // Value : ng_tensor
-  unordered_map<string, shared_ptr<ng::runtime::Tensor>> output_tensor_map;
+  //unordered_map<string, shared_ptr<ng::runtime::Tensor>> output_tensor_map;
+  map<string, shared_ptr<ng::runtime::Tensor>> output_tensor_map;
 
   // Map keeps track of encap nodes whose output is used as a value to assign
   // Map of
@@ -75,7 +76,7 @@ class NGraphCatalog {
   // Map of
   // Key string : GraphId + _ + nodename + : + output_index
   // Value : shared_ptr<ng::runtime::Tensor>
-  static unordered_map<string, shared_ptr<ng::runtime::Tensor>> output_tensor_map_;
+  static map<string, shared_ptr<ng::runtime::Tensor>> output_tensor_map_;
 
 
   static unordered_map<string, unordered_set<int>> ng_encap_output_copy_map_;
