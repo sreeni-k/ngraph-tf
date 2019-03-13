@@ -106,7 +106,7 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
     }
 
     // Update the output tensor map
-    if(node->type_string() == "NGraphAssign"){
+    if(IsNGAssignType(node->type_string())){
       for (auto edge : node->in_edges()) {
         if (!edge->src()->IsOp() || edge->IsControlEdge() || IsRefType(edge->dst()->input_type(edge->dst_input())) || edge->src()->type_string()!="NGraphEncapsulate" ){
           continue;

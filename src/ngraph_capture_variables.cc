@@ -44,6 +44,7 @@ Status CaptureVariables(Graph* graph) {
   }
 
   std::vector<Node*> replaced_nodes;
+  
 
   for (auto node : graph->op_nodes()) {
     if (NGraphPlacementRequested(node)) {
@@ -111,8 +112,13 @@ Status CaptureVariables(Graph* graph) {
         replaced_nodes.push_back(node);
       }
 
-      else if (node->type_string() == "Assign") {
+      else if (IsTFAssignType(node->type_string())) {
         NGRAPH_VLOG(1) << "Capturing: " << node->name();
+        
+        auto node_type = node->type_string();
+        auto node_replacement_type = GetNGAssignType(node_type);
+        NGRAPH_VLOG(1) << "Node Type: " << node_type <<" , Node Replacement Type "<< node_replacement_type;
+        
 
         DataType dtype;
         TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "T", &dtype));
@@ -123,22 +129,20 @@ Status CaptureVariables(Graph* graph) {
 
         for (auto edge : node->in_edges()) {
           if (edge == NULL) {
-            NGRAPH_VLOG(1) << "Capturing Assign op, but found null edge: ";
+            NGRAPH_VLOG(1) << "Capturing "<< node_type<<" op, but found null edge: ";
             continue;
           }
 
-          // Check REF TYPE RATHER THAN NAME
-          if (edge->src()->type_string() == "NGraphVariable" ||
-              edge->src()->type_string() == "VariableV2") {
+          if (edge->dst()->IsOp() && !edge->IsControlEdge() &&
+            IsRefType(edge->dst()->input_type(edge->dst_input()))) {
             input_ref = NodeBuilder::NodeOut(edge->src(), edge->src_output());
           } else {
             input_val = NodeBuilder::NodeOut(edge->src(), edge->src_output());
           }
         }
 
-        NGRAPH_VLOG(1) << "Found inputs for NGraphAssign";
         // TODO(amprocte): Do we need to copy "_" attributes?
-        TF_RETURN_IF_ERROR(NodeBuilder(node->name(), "NGraphAssign")
+        TF_RETURN_IF_ERROR(NodeBuilder(node->name(), node_replacement_type)
                                .Attr("validate_shape", true)
                                .Attr("use_locking", true)
                                .Attr("T", dtype)
@@ -148,7 +152,7 @@ Status CaptureVariables(Graph* graph) {
                                .Device(node->assigned_device_name())
                                .Finalize(graph, &replacement));
 
-        NGRAPH_VLOG(1) << "Successfully constructed NGraphAssign Node Def";
+        NGRAPH_VLOG(1) << "Successfully constructed "<< node_replacement_type<<" Node Def";
 
         replacement->set_assigned_device_name(node->assigned_device_name());
 

@@ -90,8 +90,9 @@ Status ReplaceNGraphVariable(Graph* graph, Node* node, Node** replacement,
 Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
                            std::string node_new_name, bool just_looking,
                            bool outputs_ng_supported) {
-  NGRAPH_VLOG(1) << "Replacing NGraphAssign " << node->name();
-
+  NGRAPH_VLOG(1) << "Replacing  " << node->name();
+  auto node_type = node->type_string();
+  
   DataType dtype;
   TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "T", &dtype));
 
@@ -107,7 +108,7 @@ Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
 
   for (auto edge : node->in_edges()) {
     if (edge == NULL) {
-      NGRAPH_VLOG(1) << "Replacing NGraphAssign, found null edge: ";
+      NGRAPH_VLOG(1) << "Replacing "<< node_type <<", found null edge: ";
       continue;
     }
 
@@ -120,7 +121,7 @@ Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
     }
   }
   // if NGraphAssign
-  TF_RETURN_IF_ERROR(NodeBuilder(node_new_name, "NGraphAssign")
+  TF_RETURN_IF_ERROR(NodeBuilder(node_new_name, node_type)
                          .Attr("validate_shape", true)
                          .Attr("use_locking", true)
                          .Attr("T", dtype)
@@ -143,11 +144,10 @@ Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
 Status RewriteForTracking(Graph* graph) {
   std::vector<Node*> replaced_nodes;
   std::set<string> ng_supported_ops = {"NGraphVariable", "NGraphAssign",
-                                       "NGraphEncapsulate"};
+                                       "NGraphEncapsulate", "NGraphAssignSub"};
 
   for (auto node : graph->op_nodes()) {
-    if (node->type_string() == "NGraphVariable" ||
-        node->type_string() == "NGraphAssign") {
+    if (IsNGVariableType(node->type_string())) {
       NGRAPH_VLOG(1) << "Checking: " << DebugNode(node) << " " << node->name();
 
       bool just_looking = true;
@@ -202,7 +202,7 @@ Status RewriteForTracking(Graph* graph) {
         if (node->type_string() == "NGraphVariable") {
           ReplaceNGraphVariable(graph, node, &replacement, node_new_name,
                                 just_looking, outputs_ng_supported);
-        } else if (node->type_string() == "NGraphAssign") {
+        } else if (IsNGAssignType(node->type_string())) {
           ReplaceNGraphAssign(graph, node, &replacement, node_new_name,
                               just_looking, outputs_ng_supported);
         }

@@ -52,33 +52,30 @@ class NGraphAssignSubOp : public OpKernel {
   bool copy_to_tf_;
   int ng_graph_id_;
   string ng_backend_name_;
-  // bool use_exclusive_lock_;
+  // bool use_exclusive_lock_; //TF op has this
+  ~NGraphAssignSubOp() override {
 
-  void CreateNgFunction(shared_ptr<ng::Function> ng_function, shared_ptr<ng::runtime::Tensor> ng_var, shared_ptr<ng::runtime::Tensor> ng_val){
-      auto V = make_shared<ng::op::Parameter>(ng_var->get_element_type(), ng_var->get_shape());
-      auto Val = make_shared<ng::op::Parameter>(ng_val->get_element_type(), ng_val->get_shape());
-      auto sub = make_shared<ng::op::Subtract>(V, Val);
+    // Release the backend
+  BackendManager::ReleaseBackend(ng_backend_name_);
+  NGRAPH_VLOG(2) << "~NGraphAssignSubOp";
 
-      ng_function = make_shared<ng::Function>(ng::NodeVector{sub}, ng::ParameterVector{V,Val});  
-  };
-  
+  }
  public:
   explicit NGraphAssignSubOp(OpKernelConstruction* context)
       : OpKernel(context), just_looking_(false), copy_to_tf_(false) {
-    // OP_REQUIRES_OK(context,
-    //                context->GetAttr("use_locking", &use_exclusive_lock_));
-    
     OP_REQUIRES_OK(context, context->GetAttr("just_looking", &just_looking_));
     OP_REQUIRES_OK(context, context->GetAttr("copy_to_tf", &copy_to_tf_));
     OP_REQUIRES_OK(context, context->GetAttr("ngraph_graph_id", &ng_graph_id_));
-    OP_REQUIRES_OK(context, context->GetAttr("ng_backend_name", &ng_backend_name_));
-    NGRAPH_VLOG(1) << "Constructing NGraphAssign " << def().name()
+    OP_REQUIRES_OK(context, context->GetAttr("_ngraph_backend", &ng_backend_name_));
+    NGRAPH_VLOG(1) << "Constructing NGraphAssignSub " << def().name()
                    << ": just looking? " << just_looking_ << " ,copy-to-tf "
                    << copy_to_tf_;
 
     OP_REQUIRES(context, IsRefType(context->input_type(0)),
                 errors::InvalidArgument("lhs input needs to be a ref type"));
   }
+
+
 
   void Compute(OpKernelContext* context) override {
     NGRAPH_VLOG(1) << "In Assign Sub Kernel " << def().name();
@@ -98,9 +95,9 @@ class NGraphAssignSubOp : public OpKernel {
     if (context->resource_manager()->Lookup<NGraphVar>(
             context->resource_manager()->default_container(), get_ref_var_name,
             &var) == Status::OK()) {
-      NGRAPH_VLOG(1) << "Found var in assign";
+      NGRAPH_VLOG(1) << "Found var in assignsub";
     } else {
-      NGRAPH_VLOG(1) << " Not Found var in assign";
+      NGRAPH_VLOG(1) << " Not Found var in assignsub";
     }
 
     // CARE ABOUT SYNCING AS WE ARE USING THE VAR TO GET THE NEW VALUE
@@ -162,32 +159,42 @@ class NGraphAssignSubOp : public OpKernel {
     PrintNGTensor(ng_val);
 
     // Create nGraph Function
-    shared_ptr<ng::Function> ng_function;
-    CreateNgFunction(ng_function, ng_tensor_to_assign, ng_val);
+    //CreateNgFunction(ng_function, ng_tensor_to_assign, ng_val);
+    auto V = make_shared<ng::op::Parameter>(ng_tensor_to_assign->get_element_type(), ng_tensor_to_assign->get_shape());
+    auto Val = make_shared<ng::op::Parameter>(ng_val->get_element_type(), ng_val->get_shape());
+    auto sub = make_shared<ng::op::Subtract>(V, Val);
+
+    auto ng_function = make_shared<ng::Function>(ng::NodeVector{sub}, ng::ParameterVector{V,Val}); 
+    
+    
+    NGRAPH_VLOG(1) << " Created Function ";
 
     // Compile Function to get executable
     auto ng_exec = op_backend->compile(ng_function);
-
+    NGRAPH_VLOG(1) << " Compiled Function ";
+    
+    
     // Create Output Tensor Vector
     vector<shared_ptr<ng::runtime::Tensor>> ng_outputs;
-    for (auto i = 0; i < ng_exec->get_results().size(); i++) {
+    for (int i = 0; i < ng_exec->get_results().size(); i++) {
       auto ng_element = ng_exec->get_results()[i];
       auto ng_shape = ng_element->get_shape();
       auto ng_element_type = ng_element->get_element_type();
-
-      auto ng_op = op_backend->create_tensor(ng_element_type, ng_shape);
+      shared_ptr<ng::runtime::Tensor> ng_op = op_backend->create_tensor(ng_element_type, ng_shape);
       ng_outputs.push_back(ng_op);
     }
+    NGRAPH_VLOG(1) << " Output Tensors Created ";
 
     // Create Input Tensor Vector
     vector<shared_ptr<ng::runtime::Tensor>> ng_inputs = {ng_tensor_to_assign, ng_val};
-
+     NGRAPH_VLOG(1) << " Input Tensors Created ";
+     
     // Call Executable
     ng_exec->call(ng_outputs, ng_inputs);
-    
+    NGRAPH_VLOG(1) << " Call Executed ";
 
     // Assign to the variable
-    ng_tensor_to_assign->copy_from(*ng_outputs[0]);
+    ng_tensor_to_assign->copy_from(*(ng_outputs[0]));
     NGRAPH_VLOG(1)<<"Print update Variable Value";
     PrintNGTensor(ng_tensor_to_assign);
 
@@ -198,11 +205,6 @@ class NGraphAssignSubOp : public OpKernel {
     auto tf_tensor = var->tensor();
 
     if (copy_to_tf_) {
-      // update the tf tensor
-      // mutex_lock l(*context->input_ref_mutex(0));
-      // const Tensor& old_lhs = context->mutable_input(0, /* lock_held */
-      // true);
-      // Tensor old_lhs = context->mutable_input(0, /* lock_held */ true);
       ReadNGTensor(ng_tensor_to_assign, &old_lhs);
       NGRAPH_VLOG(1) << "Copying to TF Tensor";
       NGRAPH_VLOG(1) << "Print ng-tensor";
@@ -231,6 +233,7 @@ REGISTER_OP("NGraphAssignSub")
     .Input("value: T")
     .Output("output_ref: Ref(T)")
     .Attr("T: type")
+    .Attr("validate_shape: bool = true")
     .Attr("use_locking: bool = true")
     .Attr("just_looking: bool = false")
     .Attr("copy_to_tf: bool = false")
