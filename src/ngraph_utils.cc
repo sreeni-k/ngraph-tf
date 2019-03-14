@@ -40,7 +40,7 @@ namespace ngraph_bridge {
 void PrintNGTensor(std::shared_ptr<ng::runtime::Tensor> ng_tensor) {
   DataType dtype(DT_FLOAT);
   // Should error check
-  //NGraphElementTypeToTFDataType(&dtype, ng_tensor->get_element_type());
+  // NGraphElementTypeToTFDataType(&dtype, ng_tensor->get_element_type());
 
   vector<int64> dims;
   for (auto dim : ng_tensor->get_shape()) {
@@ -241,7 +241,6 @@ Status TFTensorShapeToNGraphShape(const TensorShape& tf_shape,
 
   return Status::OK();
 }
-
 
 void print_node_histogram(const std::unordered_map<string, int>& histogram,
                           bool sorted) {

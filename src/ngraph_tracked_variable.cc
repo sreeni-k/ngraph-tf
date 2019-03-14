@@ -100,9 +100,7 @@ NGraphVariableOp::NGraphVariableOp(OpKernelConstruction* context)
                  << "backend " << ng_backend_name_;
 }
 
-NGraphVariableOp::~NGraphVariableOp() { 
-  tracker_->Unref(); 
-}
+NGraphVariableOp::~NGraphVariableOp() { tracker_->Unref(); }
 
 // (Changes: Renamed from VariableOp, modified to pass TensorShape to NGraphVar
 // constructor.)

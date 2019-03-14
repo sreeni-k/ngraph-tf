@@ -99,7 +99,7 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
 
       // output ng-copy map catalog
       unordered_set<int> op_index_to_copy;
-      NGRAPH_VLOG(1) << "Finding Output Copy required for "<< node->name();
+      NGRAPH_VLOG(1) << "Finding Output Copy required for " << node->name();
       for (auto edge : node->out_edges()) {
         if (edge->dst()->IsOp() && !edge->IsControlEdge() &&
             !IsNGVariableType(edge->dst()->type_string())) {

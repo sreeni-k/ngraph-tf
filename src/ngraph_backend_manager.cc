@@ -73,12 +73,11 @@ void BackendManager::ReleaseBackend(const string& backend_name) {
   NGRAPH_VLOG(1) << "BackendManager::ReleaseBackend(): " << backend_name
                  << " ref_count: "
                  << BackendManager::ref_count_each_backend_[backend_name];
-  
+
   if (BackendManager::ref_count_each_backend_[backend_name] == 0) {
     BackendManager::ng_backend_map_[backend_name]->backend_ptr.reset();
     BackendManager::ng_backend_map_.erase(backend_name);
-    NGRAPH_VLOG(1)<< "Backend Ref Count Got 0";
-    
+    NGRAPH_VLOG(1) << "Backend Ref Count Got 0";
   }
 }
 

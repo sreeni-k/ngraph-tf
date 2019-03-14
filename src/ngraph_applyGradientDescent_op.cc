@@ -53,6 +53,8 @@ class NGraphApplyGradientDescentOp : public OpKernel {
   bool copy_to_tf_;
   int ng_graph_id_;
   string ng_backend_name_;
+  std::unordered_map<std::string, std::shared_ptr<ngraph::runtime::Executable>>
+      ng_exec_map;
 
  public:
   explicit NGraphApplyGradientDescentOp(OpKernelConstruction* context)
@@ -60,7 +62,8 @@ class NGraphApplyGradientDescentOp : public OpKernel {
     OP_REQUIRES_OK(context, context->GetAttr("just_looking", &just_looking_));
     OP_REQUIRES_OK(context, context->GetAttr("copy_to_tf", &copy_to_tf_));
     OP_REQUIRES_OK(context, context->GetAttr("ngraph_graph_id", &ng_graph_id_));
-    OP_REQUIRES_OK(context, context->GetAttr("_ngraph_backend", &ng_backend_name_));
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("_ngraph_backend", &ng_backend_name_));
 
     OP_REQUIRES(context, IsRefType(context->input_type(0)),
                 errors::InvalidArgument("The first input must be a ref type "
@@ -106,17 +109,19 @@ class NGraphApplyGradientDescentOp : public OpKernel {
       NGRAPH_VLOG(1) << " Not Found var in NGraphApplyGradientDescent";
     }
 
-     // CARE ABOUT SYNCING HERE SINCE WE ARE USING NGVariable value for computation
+    // CARE ABOUT SYNCING HERE SINCE WE ARE USING NGVariable value for
+    // computation
     if (var->need_sync_ng_tensor()) {
-        NGRAPH_VLOG(1) << "ng tensor behind, needs to sync with tf-tensor";
-        WriteNGTensor(var->ng_tensor(), var->tensor());
-        // TODO: Is it safe to set sync as false after this sync
-        var->sync_ng_tensor(false);
+      NGRAPH_VLOG(1) << "ng tensor behind, needs to sync with tf-tensor";
+      WriteNGTensor(var->ng_tensor(), var->tensor());
+      // TODO: Is it safe to set sync as false after this sync
+      var->sync_ng_tensor(false);
     }
 
     // get the nGraphTensor
     shared_ptr<ngraph::runtime::Tensor> ng_tensor_to_assign = var->ng_tensor();
 
+    // Construct the ngraph graph for gradient descent formula
     unordered_map<int, shared_ptr<ng::runtime::Tensor>> input_to_ng_tensor_map;
 
     // Create Backend
@@ -180,38 +185,62 @@ class NGraphApplyGradientDescentOp : public OpKernel {
                                    "NGraphApplyGradientDescent \n"));
     }
 
-    // do the computation
-    // Build the graph for var - (alpha * delta)
-    auto var_param = std::make_shared<ng::op::Parameter>(
-        ng_tensor_to_assign->get_element_type(),
-        ng_tensor_to_assign->get_shape());
-    cout << ng_tensor_to_assign->get_shape() << endl;
-    auto alpha_param = std::make_shared<ng::op::Parameter>(
-        input_to_ng_tensor_map[1]->get_element_type(),
-        input_to_ng_tensor_map[1]->get_shape());
-    cout << input_to_ng_tensor_map[1]->get_shape() << endl;
-    auto delta_param = std::make_shared<ng::op::Parameter>(
-        input_to_ng_tensor_map[2]->get_element_type(),
-        input_to_ng_tensor_map[2]->get_shape());
-    cout << input_to_ng_tensor_map[2]->get_shape() << endl;
-    NGRAPH_VLOG(1) << "Constructed the parameters for the graph";
+    // Create Input Tensor Vector
+    vector<shared_ptr<ng::runtime::Tensor>> ng_inputs = {
+        ng_tensor_to_assign, input_to_ng_tensor_map[1],
+        input_to_ng_tensor_map[2]};
 
-    std::shared_ptr<ng::Node> ng_alpha_param, ng_delta_param;
-    std::tie(ng_alpha_param, ng_delta_param) =
-        ng::builder::numpy_broadcast(std::make_pair(alpha_param, delta_param));
+    // Compute the function signature as key
+    std::stringstream signature_ss;
+    for (int i = 0; i < ng_inputs.size(); i++) {
+      auto ngt = ng_inputs[i];
+      for (const auto& x : ng_inputs[i]->get_shape()) {
+        signature_ss << x << ",";
+      }
+      signature_ss << ";";
+    }
+    signature_ss << "/";
+    std::string signature = signature_ss.str();
+    NGRAPH_VLOG(1) << " Signature " << signature;
 
-    auto t0 =
-        std::make_shared<ng::op::Multiply>(ng_alpha_param, ng_delta_param);
-    auto t1 = std::make_shared<ng::op::Subtract>(var_param, t0);
+    if (ng_exec_map.find(signature) == ng_exec_map.end()) {
+      // create and compile function
+      NGRAPH_VLOG(1) << " Cache miss in NGraphApplyGraidentDescent ";
 
-    auto ng_function = std::make_shared<ng::Function>(
-        ng::NodeVector{t1},
-        ng::ParameterVector{var_param, alpha_param, delta_param});
-    NGRAPH_VLOG(1) << "Constructed ApplyGradientDescent ng_function ";
+      // Build the graph for var - (alpha * delta)
+      auto var_param = std::make_shared<ng::op::Parameter>(
+          ng_tensor_to_assign->get_element_type(),
+          ng_tensor_to_assign->get_shape());
+      cout << ng_tensor_to_assign->get_shape() << endl;
+      auto alpha_param = std::make_shared<ng::op::Parameter>(
+          input_to_ng_tensor_map[1]->get_element_type(),
+          input_to_ng_tensor_map[1]->get_shape());
+      cout << input_to_ng_tensor_map[1]->get_shape() << endl;
+      auto delta_param = std::make_shared<ng::op::Parameter>(
+          input_to_ng_tensor_map[2]->get_element_type(),
+          input_to_ng_tensor_map[2]->get_shape());
+      cout << input_to_ng_tensor_map[2]->get_shape() << endl;
+      NGRAPH_VLOG(1) << "Constructed the parameters for the graph";
 
-    // Compile Function to get executable
-    auto ng_exec = op_backend->compile(ng_function);
-    NGRAPH_VLOG(1) << "Compiled ApplyGradientDescent ng_function ";
+      std::shared_ptr<ng::Node> ng_alpha_param, ng_delta_param;
+      std::tie(ng_alpha_param, ng_delta_param) = ng::builder::numpy_broadcast(
+          std::make_pair(alpha_param, delta_param));
+
+      auto t0 =
+          std::make_shared<ng::op::Multiply>(ng_alpha_param, ng_delta_param);
+      auto t1 = std::make_shared<ng::op::Subtract>(var_param, t0);
+
+      auto ng_function = std::make_shared<ng::Function>(
+          ng::NodeVector{t1},
+          ng::ParameterVector{var_param, alpha_param, delta_param});
+      NGRAPH_VLOG(1) << "Constructed ApplyGradientDescent ng_function ";
+
+      // Compile Function to get executable
+      auto ng_exec_temp = op_backend->compile(ng_function);
+      NGRAPH_VLOG(1) << "Compiled ApplyGradientDescent ng_function ";
+      ng_exec_map[signature] = ng_exec_temp;  // cache the ng_executable
+    }
+    auto ng_exec = ng_exec_map[signature];
 
     // Create Output Tensor Vector
     std::vector<shared_ptr<ng::runtime::Tensor>> ng_outputs;
@@ -224,11 +253,6 @@ class NGraphApplyGradientDescentOp : public OpKernel {
       ng_outputs.push_back(ng_op);
     }
 
-    // Create Input Tensor Vector
-    vector<shared_ptr<ng::runtime::Tensor>> ng_inputs = {
-        ng_tensor_to_assign, input_to_ng_tensor_map[1],
-        input_to_ng_tensor_map[2]};
-
     // Call Executable
     ng_exec->call(ng_outputs, ng_inputs);
     NGRAPH_VLOG(1) << "Finished calling the compiled executable ";
@@ -237,7 +261,7 @@ class NGraphApplyGradientDescentOp : public OpKernel {
     ng_tensor_to_assign->copy_from(*ng_outputs[0]);
     NGRAPH_VLOG(1) << "Print updated tensor value after ApplyGradientDescent";
     NGRAPH_VLOG(1) << "ng_tensor_to_assign " << ng_tensor_to_assign;
-    //PrintNGTensor(ng_tensor_to_assign);
+    // PrintNGTensor(ng_tensor_to_assign);
 
     // Set the output
     context->forward_ref_input_to_ref_output(0, 0);
