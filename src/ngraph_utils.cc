@@ -38,26 +38,26 @@ namespace tensorflow {
 namespace ngraph_bridge {
 
 void PrintNGTensor(std::shared_ptr<ng::runtime::Tensor> ng_tensor) {
-  DataType dtype(DT_FLOAT);
-  // Should error check
-  //NGraphElementTypeToTFDataType(&dtype, ng_tensor->get_element_type());
+  // DataType dtype(DT_FLOAT);
+  // // Should error check
+  // //NGraphElementTypeToTFDataType(&dtype, ng_tensor->get_element_type());
 
-  vector<int64> dims;
-  for (auto dim : ng_tensor->get_shape()) {
-    dims.push_back(dim);
-  }
-  TensorShape tshape(dims);
+  // vector<int64> dims;
+  // for (auto dim : ng_tensor->get_shape()) {
+  //   dims.push_back(dim);
+  // }
+  // TensorShape tshape(dims);
 
-  Tensor tf_temp_tensor(dtype, tshape);
-  void* current_dst_ptr = DMAHelper::base(&tf_temp_tensor);
-  ng_tensor->read(current_dst_ptr, 0, ng_tensor->get_element_count() *
-                                          ng_tensor->get_element_type().size());
-  NGRAPH_VLOG(1) << "all tensor values" << (tf_temp_tensor).SummarizeValue(64)
-                 << endl;
+  // Tensor tf_temp_tensor(dtype, tshape);
+  // void* current_dst_ptr = DMAHelper::base(&tf_temp_tensor);
+  // ng_tensor->read(current_dst_ptr, 0, ng_tensor->get_element_count() *
+  //                                         ng_tensor->get_element_type().size());
+  // NGRAPH_VLOG(1) << "all tensor values" << (tf_temp_tensor).SummarizeValue(64)
+  //                << endl;
 }
 
 void PrintTFTensor(Tensor& T1) {
-  NGRAPH_VLOG(1) << "all tensor values" << (T1).SummarizeValue(64) << endl;
+  //NGRAPH_VLOG(1) << "all tensor values" << (T1).SummarizeValue(64) << endl;
 }
 
 std::string DebugNode(Node* node) {

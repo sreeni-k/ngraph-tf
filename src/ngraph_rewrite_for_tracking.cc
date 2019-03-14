@@ -135,6 +135,15 @@ Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
                          .Finalize(graph, &(*replacement)));
 
   (*replacement)->set_assigned_device_name(node->assigned_device_name());
+
+  NGRAPH_VLOG(4) << "Getting in edges: ";
+        for (auto edge : node->in_edges()) {
+          NGRAPH_VLOG(4) << "Replacing: " << edge->DebugString();
+          if(edge->IsControlEdge()){
+            graph->AddEdge(edge->src(), edge->src_output(), (*replacement), edge->dst_input());
+            graph->RemoveEdge(edge);
+          }
+        }
   return Status::OK();
 }
 

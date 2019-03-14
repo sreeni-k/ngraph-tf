@@ -52,6 +52,8 @@ class NGraphAssignAddOp : public OpKernel {
   bool copy_to_tf_;
   int ng_graph_id_;
   string ng_backend_name_;
+   std::unordered_map<std::string, std::shared_ptr<ngraph::runtime::Executable>>
+      ng_exec_map;
   // bool use_exclusive_lock_; //TF op has this
   ~NGraphAssignAddOp() override {
 
@@ -159,19 +161,40 @@ class NGraphAssignAddOp : public OpKernel {
     PrintNGTensor(ng_val);
 
     // Create nGraph Function
-    //CreateNgFunction(ng_function, ng_tensor_to_assign, ng_val);
-    auto V = make_shared<ng::op::Parameter>(ng_tensor_to_assign->get_element_type(), ng_tensor_to_assign->get_shape());
-    auto Val = make_shared<ng::op::Parameter>(ng_val->get_element_type(), ng_val->get_shape());
-    auto add = make_shared<ng::op::Add>(V, Val);
+    // Create Input Tensor Vector
+    vector<shared_ptr<ng::runtime::Tensor>> ng_inputs = {ng_tensor_to_assign, ng_val};
+     NGRAPH_VLOG(1) << " Input Tensors Created ";
 
-    auto ng_function = make_shared<ng::Function>(ng::NodeVector{add}, ng::ParameterVector{V,Val}); 
-    
-    
-    NGRAPH_VLOG(1) << " Created Function ";
+     std::stringstream signature_ss;
+    for (int i = 0; i < ng_inputs.size(); i++) {
+      auto ngt = ng_inputs[i];
+      for (const auto& x : ng_inputs[i]->get_shape()) {
+        signature_ss << x << ",";
+      }
+      signature_ss << ";";
+    }
 
-    // Compile Function to get executable
-    auto ng_exec = op_backend->compile(ng_function);
-    NGRAPH_VLOG(1) << " Compiled Function ";
+    signature_ss << "/";
+    std::string signature = signature_ss.str();
+    NGRAPH_VLOG(1)<<" Signature " <<signature;
+
+    if(ng_exec_map.find(signature)== ng_exec_map.end()){
+      //create and compile function
+      NGRAPH_VLOG(1)<<" Cache miss ";
+      auto V = make_shared<ng::op::Parameter>(ng_tensor_to_assign->get_element_type(), ng_tensor_to_assign->get_shape());
+      auto Val = make_shared<ng::op::Parameter>(ng_val->get_element_type(), ng_val->get_shape());
+      auto add = make_shared<ng::op::Add>(V, Val);
+
+      auto ng_function = make_shared<ng::Function>(ng::NodeVector{add}, ng::ParameterVector{V,Val}); 
+      
+      NGRAPH_VLOG(1) << " Created Function ";
+
+      // Compile Function to get executable
+      auto ng_exec_temp = op_backend->compile(ng_function);
+      NGRAPH_VLOG(1) << " Compiled Function ";
+      ng_exec_map[signature] = ng_exec_temp;
+    }
+    auto ng_exec = ng_exec_map[signature];
     
     
     // Create Output Tensor Vector
@@ -185,10 +208,6 @@ class NGraphAssignAddOp : public OpKernel {
     }
     NGRAPH_VLOG(1) << " Output Tensors Created ";
 
-    // Create Input Tensor Vector
-    vector<shared_ptr<ng::runtime::Tensor>> ng_inputs = {ng_tensor_to_assign, ng_val};
-     NGRAPH_VLOG(1) << " Input Tensors Created ";
-     
     // Call Executable
     ng_exec->call(ng_outputs, ng_inputs);
     NGRAPH_VLOG(1) << " Call Executed ";

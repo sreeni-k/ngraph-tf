@@ -31,6 +31,7 @@
 #include "ngraph_freshness_tracker.h"
 #include "ngraph_utils.h"
 #include "ngraph_var.h"
+#include "ngraph_timer.h"
 
 using namespace std;
 namespace ng = ngraph;
@@ -52,6 +53,8 @@ class NGraphAssignSubOp : public OpKernel {
   bool copy_to_tf_;
   int ng_graph_id_;
   string ng_backend_name_;
+  std::unordered_map<std::string, std::shared_ptr<ngraph::runtime::Executable>>
+      ng_exec_map;
   // bool use_exclusive_lock_; //TF op has this
   ~NGraphAssignSubOp() override {
 
@@ -78,6 +81,7 @@ class NGraphAssignSubOp : public OpKernel {
 
 
   void Compute(OpKernelContext* context) override {
+    Timer assign_sub_op;
     NGRAPH_VLOG(1) << "In Assign Sub Kernel " << def().name();
     NGRAPH_VLOG(1) << "Copy to TF " << PrintBool(copy_to_tf_);
     NGRAPH_VLOG(1) << "Just Looking " << PrintBool(just_looking_);
@@ -101,13 +105,15 @@ class NGraphAssignSubOp : public OpKernel {
     }
 
     // CARE ABOUT SYNCING AS WE ARE USING THE VAR TO GET THE NEW VALUE
+    Timer sync_tensor;
     if (var->need_sync_ng_tensor()) {
         NGRAPH_VLOG(1) << "ng tensor behind, needs to sync with tf-tensor";
         WriteNGTensor(var->ng_tensor(), var->tensor());
         // TODO: Is it safe to set sync as false after this sync
         var->sync_ng_tensor(false);
     }
-
+    int time_sync_tensor =
+        sync_tensor.ElapsedInMS();
     // get the nGraphTensor Variable
     shared_ptr<ngraph::runtime::Tensor> ng_tensor_to_assign = var->ng_tensor();
     
@@ -159,20 +165,42 @@ class NGraphAssignSubOp : public OpKernel {
     PrintNGTensor(ng_val);
 
     // Create nGraph Function
-    //CreateNgFunction(ng_function, ng_tensor_to_assign, ng_val);
-    auto V = make_shared<ng::op::Parameter>(ng_tensor_to_assign->get_element_type(), ng_tensor_to_assign->get_shape());
-    auto Val = make_shared<ng::op::Parameter>(ng_val->get_element_type(), ng_val->get_shape());
-    auto sub = make_shared<ng::op::Subtract>(V, Val);
+    Timer compute_val;
 
-    auto ng_function = make_shared<ng::Function>(ng::NodeVector{sub}, ng::ParameterVector{V,Val}); 
-    
-    
-    NGRAPH_VLOG(1) << " Created Function ";
+    // Create Input Tensor Vector
+    vector<shared_ptr<ng::runtime::Tensor>> ng_inputs = {ng_tensor_to_assign, ng_val};
+     NGRAPH_VLOG(1) << " Input Tensors Created ";
 
-    // Compile Function to get executable
-    auto ng_exec = op_backend->compile(ng_function);
-    NGRAPH_VLOG(1) << " Compiled Function ";
-    
+     std::stringstream signature_ss;
+    for (int i = 0; i < ng_inputs.size(); i++) {
+      auto ngt = ng_inputs[i];
+      for (const auto& x : ng_inputs[i]->get_shape()) {
+        signature_ss << x << ",";
+      }
+      signature_ss << ";";
+    }
+
+    signature_ss << "/";
+    std::string signature = signature_ss.str();
+    NGRAPH_VLOG(1)<<" Signature " <<signature;
+
+    if(ng_exec_map.find(signature)== ng_exec_map.end()){
+      //create and compile function
+      NGRAPH_VLOG(1)<<" Cache miss ";
+      auto V = make_shared<ng::op::Parameter>(ng_tensor_to_assign->get_element_type(), ng_tensor_to_assign->get_shape());
+      auto Val = make_shared<ng::op::Parameter>(ng_val->get_element_type(), ng_val->get_shape());
+      auto sub = make_shared<ng::op::Subtract>(V, Val);
+
+      auto ng_function = make_shared<ng::Function>(ng::NodeVector{sub}, ng::ParameterVector{V,Val}); 
+      
+      NGRAPH_VLOG(1) << " Created Function ";
+
+      // Compile Function to get executable
+      auto ng_exec_temp = op_backend->compile(ng_function);
+      NGRAPH_VLOG(1) << " Compiled Function ";
+      ng_exec_map[signature] = ng_exec_temp;
+    }
+    auto ng_exec = ng_exec_map[signature];
     
     // Create Output Tensor Vector
     vector<shared_ptr<ng::runtime::Tensor>> ng_outputs;
@@ -185,19 +213,21 @@ class NGraphAssignSubOp : public OpKernel {
     }
     NGRAPH_VLOG(1) << " Output Tensors Created ";
 
-    // Create Input Tensor Vector
-    vector<shared_ptr<ng::runtime::Tensor>> ng_inputs = {ng_tensor_to_assign, ng_val};
-     NGRAPH_VLOG(1) << " Input Tensors Created ";
+    
      
     // Call Executable
     ng_exec->call(ng_outputs, ng_inputs);
     NGRAPH_VLOG(1) << " Call Executed ";
+    int time_compute_val =
+        compute_val.ElapsedInMS();
 
     // Assign to the variable
+    Timer assign_val;
     ng_tensor_to_assign->copy_from(*(ng_outputs[0]));
     NGRAPH_VLOG(1)<<"Print update Variable Value";
     PrintNGTensor(ng_tensor_to_assign);
-
+    int time_assign_val =
+        assign_val.ElapsedInMS();
 
     // 
     mutex_lock l(*context->input_ref_mutex(0));
@@ -225,6 +255,16 @@ class NGraphAssignSubOp : public OpKernel {
 
     // Unref Var
     var->Unref();
+    int time_assign_sub_op =
+        assign_sub_op.ElapsedInMS();
+    NGRAPH_VLOG(1) << "NGRAPH_TF_TIMING_PROFILE: "
+                   << " Assign Sub Op: " << def().name()
+                   << " Time-Compute: " << time_assign_sub_op
+                   << " Time Sync Tensor" << time_sync_tensor
+                   << " Time Compute Val" << time_compute_val
+                   << " Time Assign Val" << time_assign_val <<
+                   std::endl;
+    
   }
 };
 
