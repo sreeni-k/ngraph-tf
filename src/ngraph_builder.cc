@@ -26,6 +26,8 @@
 #include "ngraph/op/argmax.hpp"
 #include "ngraph/op/argmin.hpp"
 
+#include "ngraph/runtime/nnpi/op/depth_to_space.hpp"
+
 #include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
 #include "tensorflow/core/framework/tensor_shape.pb_text.h"
