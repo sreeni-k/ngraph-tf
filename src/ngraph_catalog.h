@@ -80,8 +80,7 @@ class NGraphCatalog {
   // otherwise
   //  string : GraphId + _ + nodename + : + output_index
   // Value : shared_ptr<ng::runtime::Tensor>
-  static unordered_map<string, shared_ptr<ng::runtime::Tensor>>
-      output_tensor_map_;
+  static map<string, shared_ptr<ng::runtime::Tensor>> output_tensor_map_;
 
   static unordered_map<string, unordered_set<int>> ng_encap_output_copy_map_;
   static void AddEncapCopyOutputCatalog(string key, unordered_set<int> val);
@@ -104,9 +103,7 @@ class NGraphCatalog {
   static bool ExistsInOutputCatalog(int graphid, string node_name,
                                     int input_index);
 
-  static shared_ptr<ng::runtime::Tensor> GetNgTensorFromOutputCatalog(
-      string key);
-
+  static shared_ptr<ng::runtime::Tensor> GetNgTensorFromOutputCatalog(string key);
   static void DeleteTensorFromEncapOutputCatalog(string key);
 };
 

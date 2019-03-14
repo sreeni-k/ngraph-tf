@@ -107,15 +107,23 @@ class NGraphAssignOp : public OpKernel {
     shared_ptr<ngraph::runtime::Tensor> ng_tensor_to_assign = var->ng_tensor();
 
     // DO NOT CARE ABOUT SYNCING AS WE ARE ALWAYS SETTING THE NGTENSOR
-     
+    NGRAPH_VLOG(1) << " Before Assigning";
+    NGRAPH_VLOG(1) << " Print NG Tensor ";
+    PrintNGTensor(ng_tensor_to_assign);
+    NGRAPH_VLOG(1) << " Print TF Tensor :vartensor";
+    //PrintTFTensor(old_lhs);
+    PrintTFTensor(*(var->tensor()));
+    
     string valkey = to_string(ng_graph_id_) + "_" + def().input(1);
     bool valref_exists = NGraphCatalog::ExistsInOutputCatalog(valkey);
     if (valref_exists) {
       // Value is from encap
       NGRAPH_VLOG(1) << "Directly assigning from : " << valkey;
       auto ng_val = NGraphCatalog::GetNgTensorFromOutputCatalog(valkey);
-      NGRAPH_VLOG(1) << "Got tensor " << valkey << " " << ng_val;
-      NGRAPH_VLOG(1) << "Is null " << ((ng_val == NULL) ? "Yes" : "No");
+      NGRAPH_VLOG(1)<<"Got tensor " <<valkey << " "<<ng_val;
+      NGRAPH_VLOG(1)<<"Is null " << ((ng_val==NULL) ? "Yes" : "No");
+      NGRAPH_VLOG(1) << " Print ng Value to Assign ";
+      PrintNGTensor(ng_val);
       ng_tensor_to_assign->copy_from(*ng_val);
     } else {
       NGRAPH_VLOG(1) << "Getting from TF : " << valkey;

@@ -28,17 +28,19 @@ namespace tensorflow {
 namespace ngraph_bridge {
 
 unordered_map<string, string> NGraphCatalog::input_variable_map_;
-unordered_map<string, shared_ptr<ng::runtime::Tensor>>
-    NGraphCatalog::output_tensor_map_;
-unordered_map<string, unordered_set<int>>
-    NGraphCatalog::ng_encap_output_copy_map_;
+map<string, shared_ptr<ng::runtime::Tensor>> NGraphCatalog::output_tensor_map_;
+unordered_map<string, unordered_set<int>> NGraphCatalog::ng_encap_output_copy_map_;
 
 void NGraphCatalog::AddEncapCopyOutputCatalog(string key,
                                               unordered_set<int> val) {
   NGraphCatalog::ng_encap_output_copy_map_[key] = val;
 }
 
-bool NGraphCatalog::EncapOutputNeedsCopy(string key, int index) {
+unordered_set<int> NGraphCatalog::GetEncapOutputIndexesNeedsCopy(string key){
+  return NGraphCatalog::ng_encap_output_copy_map_[key];
+}
+
+bool NGraphCatalog::EncapOutputNeedsCopy(string key, int index){
   auto itr = NGraphCatalog::ng_encap_output_copy_map_.find(key);
   if (itr != NGraphCatalog::ng_encap_output_copy_map_.end()) {
     auto op_copy_indexes = itr->second;
