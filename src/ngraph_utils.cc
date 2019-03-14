@@ -39,17 +39,25 @@ namespace ngraph_bridge {
 
 void PrintNGTensor(std::shared_ptr<ng::runtime::Tensor> ng_tensor) {
   DataType dtype(DT_FLOAT);
-  TensorShape tshape({2, 2});
+  // Should error check
+  //NGraphElementTypeToTFDataType(&dtype, ng_tensor->get_element_type());
+
+  vector<int64> dims;
+  for (auto dim : ng_tensor->get_shape()) {
+    dims.push_back(dim);
+  }
+  TensorShape tshape(dims);
+
   Tensor tf_temp_tensor(dtype, tshape);
   void* current_dst_ptr = DMAHelper::base(&tf_temp_tensor);
   ng_tensor->read(current_dst_ptr, 0, ng_tensor->get_element_count() *
                                           ng_tensor->get_element_type().size());
-  NGRAPH_VLOG(5) << "all tensor values" << (tf_temp_tensor).SummarizeValue(64)
+  NGRAPH_VLOG(1) << "all tensor values" << (tf_temp_tensor).SummarizeValue(64)
                  << endl;
 }
 
 void PrintTFTensor(Tensor& T1) {
-  NGRAPH_VLOG(5) << "all tensor values" << (T1).SummarizeValue(64) << endl;
+  NGRAPH_VLOG(1) << "all tensor values" << (T1).SummarizeValue(64) << endl;
 }
 
 std::string DebugNode(Node* node) {
@@ -180,6 +188,43 @@ Status TFDataTypeToNGraphElementType(DataType tf_dt,
   return Status::OK();
 }
 
+// Status NGraphElementTypeToTFDataType(DataType* tf_dt,
+//                                      ngraph::element::Type ng_et) {
+//   switch (ng_et) {
+//     case ng::element::f32:
+//       *tf_dt = DataType::DT_FLOAT:
+//       break;
+//     case ng::element::f64:
+//       *tf_dt =DataType::DT_DOUBLE;
+//       break;
+//     case ng::element::i32:
+//       *tf_dt = DataType::DT_INT32;
+//       break;
+//     case ng::element::u8:
+//       *tf_dt =DataType::DT_UINT8;
+//       break;
+//     case ng::element::u16:
+//       *tf_dt =DataType::DT_UINT16;
+//       break;
+//     case ng::element::i64:
+//       *tf_dt =DataType::DT_INT64;
+//       break;
+//     case ng::element::u32:
+//       *tf_dt =DataType::DT_UINT32;
+//       break;
+//     case ng::element::u64:
+//       *tf_dt =DataType::DT_UINT64;
+//       break;
+//     case ng::element::boolean:
+//       *tf_dt =DataType::DT_BOOL;
+//       break;
+//     default:
+//       return errors::Unimplemented("Unsupported TensorFlow data type: ",
+//                                    DataType_Name(tf_dt));
+//   }
+//   return Status::OK();
+// }
+
 Status TFTensorShapeToNGraphShape(const TensorShape& tf_shape,
                                   ngraph::Shape* ng_shape) {
   for (int i = 0; i < tf_shape.dims(); i++) {
@@ -196,6 +241,7 @@ Status TFTensorShapeToNGraphShape(const TensorShape& tf_shape,
 
   return Status::OK();
 }
+
 
 void print_node_histogram(const std::unordered_map<string, int>& histogram,
                           bool sorted) {

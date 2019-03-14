@@ -85,7 +85,13 @@ class NGraphVar : public ResourceBase {
   string ng_backend_name_;
   // sync from tf to ng
   bool sync_ng_tensor_;
-  ~NGraphVar() override {}
+  ~NGraphVar() override {
+
+    // Release the backend
+  BackendManager::ReleaseBackend(ng_backend_name_);
+  NGRAPH_VLOG(2) << "~NGraphVar";
+
+  }
 };
 
 }  // namespace ng-bridge

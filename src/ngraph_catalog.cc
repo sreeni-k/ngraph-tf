@@ -74,6 +74,10 @@ shared_ptr<ng::runtime::Tensor> NGraphCatalog::GetNgTensorFromOutputCatalog(
   return NGraphCatalog::output_tensor_map_[key];
 }
 
+void NGraphCatalog::DeleteTensorFromEncapOutputCatalog(string key){
+  NGraphCatalog::output_tensor_map_.erase(key);
+}
+
 string NGraphCatalog::GetInputSharedName(int graphid, string node_name,
                                          int input_index) {
   std::string node_key =
