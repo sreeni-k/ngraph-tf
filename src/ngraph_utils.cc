@@ -74,15 +74,15 @@ bool IsNGVariableType(string node_type) {
 }
 
 bool IsTFAssignType(string node_type){
-  return (node_type == "Assign" || node_type=="AssignSub");
+  return (node_type == "Assign" || node_type=="AssignSub" || node_type=="AssignAdd");
 };
 
 bool IsNGAssignType(string node_type){
-  return (node_type == "NGraphAssign" || node_type=="NGraphAssignSub");
+  return (node_type == "NGraphAssign" || node_type=="NGraphAssignSub" || node_type=="NGraphAssignAdd");
 };
 
 string GetNGAssignType(string tf_node_type){
-  static map<string, string> assing_ops_replacement_map ={{"Assign", "NGraphAssign" }, {"AssignSub", "NGraphAssignSub" }} ;
+  static map<string, string> assing_ops_replacement_map ={{"Assign", "NGraphAssign" }, {"AssignSub", "NGraphAssignSub"}, {"AssignAdd", "NGraphAssignAdd" } } ;
   return assing_ops_replacement_map[tf_node_type];
 }
 

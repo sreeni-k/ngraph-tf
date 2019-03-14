@@ -87,7 +87,7 @@ class NGraphAssignSubOp : public OpKernel {
     if (!ref_exists) {
       OP_REQUIRES(context, ref_exists,
                   errors::Internal(
-                      "Caught exception : RefInput to NGAssign not found \n"));
+                      "Caught exception : RefInput to NGAssignSub not found \n"));
     }
     string get_ref_var_name =
         NGraphCatalog::GetInputSharedName(ng_graph_id_, def().name(), 0);

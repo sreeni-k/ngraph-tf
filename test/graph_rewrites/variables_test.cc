@@ -128,7 +128,7 @@ TEST(Variables, SmallGraph2) {
 
   auto add = ops::Add(root.WithOpName("Add1"), var, c);
 
-  auto assign = ops::AssignSub(root, var, add);
+  auto assign = ops::AssignAdd(root, var, add);
 
   auto add2 = ops::Add(root.WithOpName("Add2"), assign, c);
 

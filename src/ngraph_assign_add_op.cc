@@ -41,33 +41,33 @@ namespace ngraph_bridge {
 
 /* -------------------------------------------------
 //
-// NGraphAssignSubOp
+// NGraphAssignAddOp
 //
 ---------------------------------------------------*/
 
-// Computes *input[0] = *input[0] - input[1]
-class NGraphAssignSubOp : public OpKernel {
+// Computes *input[0] = *input[0] + input[1]
+class NGraphAssignAddOp : public OpKernel {
  private:
   bool just_looking_;
   bool copy_to_tf_;
   int ng_graph_id_;
   string ng_backend_name_;
   // bool use_exclusive_lock_; //TF op has this
-  ~NGraphAssignSubOp() override {
+  ~NGraphAssignAddOp() override {
 
     // Release the backend
   BackendManager::ReleaseBackend(ng_backend_name_);
-  NGRAPH_VLOG(2) << "~NGraphAssignSubOp";
+  NGRAPH_VLOG(2) << "~NGraphAssignAddOp";
 
   }
  public:
-  explicit NGraphAssignSubOp(OpKernelConstruction* context)
+  explicit NGraphAssignAddOp(OpKernelConstruction* context)
       : OpKernel(context), just_looking_(false), copy_to_tf_(false) {
     OP_REQUIRES_OK(context, context->GetAttr("just_looking", &just_looking_));
     OP_REQUIRES_OK(context, context->GetAttr("copy_to_tf", &copy_to_tf_));
     OP_REQUIRES_OK(context, context->GetAttr("ngraph_graph_id", &ng_graph_id_));
     OP_REQUIRES_OK(context, context->GetAttr("_ngraph_backend", &ng_backend_name_));
-    NGRAPH_VLOG(1) << "Constructing NGraphAssignSub " << def().name()
+    NGRAPH_VLOG(1) << "Constructing NGraphAssignAdd " << def().name()
                    << ": just looking? " << just_looking_ << " ,copy-to-tf "
                    << copy_to_tf_;
 
@@ -78,7 +78,7 @@ class NGraphAssignSubOp : public OpKernel {
 
 
   void Compute(OpKernelContext* context) override {
-    NGRAPH_VLOG(1) << "In Assign Sub Kernel " << def().name();
+    NGRAPH_VLOG(1) << "In Assign Add Kernel " << def().name();
     NGRAPH_VLOG(1) << "Copy to TF " << PrintBool(copy_to_tf_);
     NGRAPH_VLOG(1) << "Just Looking " << PrintBool(just_looking_);
 
@@ -87,7 +87,7 @@ class NGraphAssignSubOp : public OpKernel {
     if (!ref_exists) {
       OP_REQUIRES(context, ref_exists,
                   errors::Internal(
-                      "Caught exception : RefInput to NGAssign not found \n"));
+                      "Caught exception : RefInput to NGAssignAdd not found \n"));
     }
     string get_ref_var_name =
         NGraphCatalog::GetInputSharedName(ng_graph_id_, def().name(), 0);
@@ -95,9 +95,9 @@ class NGraphAssignSubOp : public OpKernel {
     if (context->resource_manager()->Lookup<NGraphVar>(
             context->resource_manager()->default_container(), get_ref_var_name,
             &var) == Status::OK()) {
-      NGRAPH_VLOG(1) << "Found var in assignsub";
+      NGRAPH_VLOG(1) << "Found var in assignadd";
     } else {
-      NGRAPH_VLOG(1) << " Not Found var in assignsub";
+      NGRAPH_VLOG(1) << " Not Found var in assignadd";
     }
 
     // CARE ABOUT SYNCING AS WE ARE USING THE VAR TO GET THE NEW VALUE
@@ -122,7 +122,7 @@ class NGraphAssignSubOp : public OpKernel {
     ng::runtime::Backend* op_backend =
         BackendManager::GetBackend(ng_backend_name_);
 
-    // Get the Value to be subtracted
+    // Get the Value to be added
     const Tensor& rhs = context->input(1);
     // We always return the input ref.
     context->forward_ref_input_to_ref_output(0, 0);
@@ -162,9 +162,9 @@ class NGraphAssignSubOp : public OpKernel {
     //CreateNgFunction(ng_function, ng_tensor_to_assign, ng_val);
     auto V = make_shared<ng::op::Parameter>(ng_tensor_to_assign->get_element_type(), ng_tensor_to_assign->get_shape());
     auto Val = make_shared<ng::op::Parameter>(ng_val->get_element_type(), ng_val->get_shape());
-    auto sub = make_shared<ng::op::Subtract>(V, Val);
+    auto add = make_shared<ng::op::Add>(V, Val);
 
-    auto ng_function = make_shared<ng::Function>(ng::NodeVector{sub}, ng::ParameterVector{V,Val}); 
+    auto ng_function = make_shared<ng::Function>(ng::NodeVector{add}, ng::ParameterVector{V,Val}); 
     
     
     NGRAPH_VLOG(1) << " Created Function ";
@@ -228,7 +228,7 @@ class NGraphAssignSubOp : public OpKernel {
   }
 };
 
-REGISTER_OP("NGraphAssignSub")
+REGISTER_OP("NGraphAssignAdd")
     .Input("ref: Ref(T)")
     .Input("value: T")
     .Output("output_ref: Ref(T)")
@@ -239,8 +239,8 @@ REGISTER_OP("NGraphAssignSub")
     .Attr("copy_to_tf: bool = false")
     .Attr("ngraph_graph_id: int");
 
-REGISTER_KERNEL_BUILDER(Name("NGraphAssignSub").Device(DEVICE_CPU),
-                        NGraphAssignSubOp);
+REGISTER_KERNEL_BUILDER(Name("NGraphAssignAdd").Device(DEVICE_CPU),
+                        NGraphAssignAddOp);
 
 }  // namespace ngraph_bridge
 
