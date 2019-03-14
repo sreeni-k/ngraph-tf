@@ -211,15 +211,12 @@ class NGraphApplyGradientDescentOp : public OpKernel {
       auto var_param = std::make_shared<ng::op::Parameter>(
           ng_tensor_to_assign->get_element_type(),
           ng_tensor_to_assign->get_shape());
-      cout << ng_tensor_to_assign->get_shape() << endl;
       auto alpha_param = std::make_shared<ng::op::Parameter>(
           input_to_ng_tensor_map[1]->get_element_type(),
           input_to_ng_tensor_map[1]->get_shape());
-      cout << input_to_ng_tensor_map[1]->get_shape() << endl;
       auto delta_param = std::make_shared<ng::op::Parameter>(
           input_to_ng_tensor_map[2]->get_element_type(),
           input_to_ng_tensor_map[2]->get_shape());
-      cout << input_to_ng_tensor_map[2]->get_shape() << endl;
       NGRAPH_VLOG(1) << "Constructed the parameters for the graph";
 
       std::shared_ptr<ng::Node> ng_alpha_param, ng_delta_param;

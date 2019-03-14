@@ -74,12 +74,6 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
       NGRAPH_VLOG(1) << "Key: " << node_key;
       NGRAPH_VLOG(1) << "Value: " << shared_name;
 
-      if (node->type_string() == "NGraphApplyGradientDescent") {
-        cout << "Mingshan enter catelog for NGraphApplyGD" << endl;
-        cout << "Mingshan key " << node_key << endl;
-        cout << "Mingshan value " << shared_name << endl;
-      }
-
     } else if (node->type_string() == "NGraphEncapsulate") {
       // input catalog
       for (auto edge : node->in_edges()) {
@@ -140,11 +134,6 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
         NGraphCatalog::AddOutputCatalog(node_key, nullptr);
         NGRAPH_VLOG(1) << "Adding in output Catalog ";
         NGRAPH_VLOG(1) << "Key: " << node_key;
-
-        if (node->type_string() == "NGraphApplyGradientDescent") {
-          cout << "Mingshan enter output catelog for NGraphApplyGD" << endl;
-          cout << "Mingshan key " << node_key << endl;
-        }
       }
     }  // end of if node of type NGraphAssign
   }    // enter in catalog
