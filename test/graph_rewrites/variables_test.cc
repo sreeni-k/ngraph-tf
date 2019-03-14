@@ -76,7 +76,7 @@ TEST(Variables, SmallGraph1) {
       &ng_outputs1));
   std::cout << "initialize var: " << ng_outputs1[0].matrix<float>()
             << std::endl;
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 2; i++) {
     ASSERT_OK(ng_session.Run({assign}, &ng_outputs2));
     // Print the output
     std::cout << "itr: " << i << " ,Result: " << ng_outputs2[0].matrix<float>()
@@ -100,7 +100,7 @@ TEST(Variables, SmallGraph1) {
       &tf_outputs1));
   std::cout << "initialize var: " << tf_outputs1[0].matrix<float>()
             << std::endl;
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 2; i++) {
     ASSERT_OK(tf_session.Run({assign}, &tf_outputs2));
     // Print the output
     std::cout << "itr: " << i << " ,Result: " << tf_outputs2[0].matrix<float>()
@@ -128,11 +128,11 @@ TEST(Variables, SmallGraph2) {
 
   auto add = ops::Add(root.WithOpName("Add1"), var, c);
 
-  auto assign = ops::Assign(root, var, add);
+  auto assign = ops::AssignAdd(root, var, add);
 
   auto add2 = ops::Add(root.WithOpName("Add2"), assign, c);
 
-  auto assign2 = ops::Assign(root, var, add2);
+  auto assign2 = ops::AssignSub(root, var, add2);
 
   // Turn off optimizations so that all the nodes are processed
   tensorflow::SessionOptions options;
@@ -208,9 +208,9 @@ TEST(Variables, SmallGraph3) {
 
   auto add = ops::Add(root, var, c);
 
-  auto assign = ops::Assign(root, var, add);
+  auto assign = ops::AssignSub(root, var, add);
 
-  auto apply_gradient_descent = ops::ApplyGradientDescent(root, var, s, d);
+  auto apply_gradient_descent = ops::ApplyGradientDescent(root, assign, s, d);
 
   // Turn off optimizations so that all the nodes are processed
   tensorflow::SessionOptions options;
@@ -246,8 +246,10 @@ TEST(Variables, SmallGraph3) {
     std::cout << "itr: " << i << " ,Result: " << ng_outputs2[0].matrix<float>()
               << std::endl;
   }
+  
+  for (int i = 0; i < 10; i++) {
   ASSERT_OK(ng_session.Run({apply_gradient_descent}, &ng_outputs3));
-
+  }
   // this apply_gradient_descent result should be {{10.0,10.0},{10.0,10.0}}
   std::cout << "ApplyGradientDescent value " << ng_outputs3[0].matrix<float>()
             << std::endl;
@@ -287,8 +289,9 @@ TEST(Variables, SmallGraph3) {
     std::cout << "itr: " << i << " ,Result: " << tf_outputs2[0].matrix<float>()
               << std::endl;
   }
+  for (int i = 0; i < 10; i++) {
   ASSERT_OK(tf_session.Run({apply_gradient_descent}, &tf_outputs3));
-
+  }
   // this apply_gradient_descent result should be {{10.0,10.0},{10.0,10.0}}
   std::cout << "ApplyGradientDescent value " << tf_outputs3[0].matrix<float>()
             << std::endl;
@@ -299,7 +302,7 @@ TEST(Variables, SmallGraph3) {
     std::cout << "itr: " << i << " ,Result: " << tf_outputs4[0].matrix<float>()
               << std::endl;
   }
-
+  
   ASSERT_OK(tf_session.Run({var}, &tf_outputs5));
   std::cout << "Final var: " << tf_outputs5[0].matrix<float>() << std::endl;
 
