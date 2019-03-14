@@ -52,6 +52,7 @@ class NGraphApplyGradientDescentOp : public OpKernel {
   bool just_looking_;
   bool copy_to_tf_;
   int ng_graph_id_;
+  string ng_backend_name_;
 
  public:
   explicit NGraphApplyGradientDescentOp(OpKernelConstruction* context)
@@ -59,6 +60,7 @@ class NGraphApplyGradientDescentOp : public OpKernel {
     OP_REQUIRES_OK(context, context->GetAttr("just_looking", &just_looking_));
     OP_REQUIRES_OK(context, context->GetAttr("copy_to_tf", &copy_to_tf_));
     OP_REQUIRES_OK(context, context->GetAttr("ngraph_graph_id", &ng_graph_id_));
+    OP_REQUIRES_OK(context, context->GetAttr("_ngraph_backend", &ng_backend_name_));
 
     OP_REQUIRES(context, IsRefType(context->input_type(0)),
                 errors::InvalidArgument("The first input must be a ref type "
@@ -67,6 +69,15 @@ class NGraphApplyGradientDescentOp : public OpKernel {
     NGRAPH_VLOG(1) << "Constructing NGraphApplyGradientDescent " << def().name()
                    << ": just looking? " << just_looking_ << " ,copy-to-tf "
                    << copy_to_tf_;
+  }
+
+  //---------------------------------------------------------------------------
+  //  ~NGraphApplyGradientDescentOp()
+  //---------------------------------------------------------------------------
+  ~NGraphApplyGradientDescentOp() override {
+    // Release the backend
+    BackendManager::ReleaseBackend(ng_backend_name_);
+    NGRAPH_VLOG(2) << " ~NGraphApplyGradientDescentOp";
   }
 
   void Compute(OpKernelContext* context) override {
@@ -95,12 +106,20 @@ class NGraphApplyGradientDescentOp : public OpKernel {
       NGRAPH_VLOG(1) << " Not Found var in NGraphApplyGradientDescent";
     }
 
+     // CARE ABOUT SYNCING HERE SINCE WE ARE USING NGVariable value for computation
+    if (var->need_sync_ng_tensor()) {
+        NGRAPH_VLOG(1) << "ng tensor behind, needs to sync with tf-tensor";
+        WriteNGTensor(var->ng_tensor(), var->tensor());
+        // TODO: Is it safe to set sync as false after this sync
+        var->sync_ng_tensor(false);
+    }
+
     // get the nGraphTensor
     shared_ptr<ngraph::runtime::Tensor> ng_tensor_to_assign = var->ng_tensor();
 
     unordered_map<int, shared_ptr<ng::runtime::Tensor>> input_to_ng_tensor_map;
+
     // Create Backend
-    std::string ng_backend_name_ = "CPU";
     BackendManager::CreateBackend(ng_backend_name_);
     ng::runtime::Backend* op_backend =
         BackendManager::GetBackend(ng_backend_name_);
@@ -217,12 +236,11 @@ class NGraphApplyGradientDescentOp : public OpKernel {
     // Assign to the variable
     ng_tensor_to_assign->copy_from(*ng_outputs[0]);
     NGRAPH_VLOG(1) << "Print updated tensor value after ApplyGradientDescent";
-    PrintNGTensor(ng_tensor_to_assign);
+    NGRAPH_VLOG(1) << "ng_tensor_to_assign " << ng_tensor_to_assign;
+    //PrintNGTensor(ng_tensor_to_assign);
 
     // Set the output
     context->forward_ref_input_to_ref_output(0, 0);
-
-    // CARE ABOUT SYNCING HERE SINCE WE ARE USING NGVariable result
 
     mutex_lock l(*context->input_ref_mutex(0));
     Tensor old_lhs = context->mutable_input(0, /* lock_held */ true);
