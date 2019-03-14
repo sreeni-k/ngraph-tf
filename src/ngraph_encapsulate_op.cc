@@ -682,10 +682,8 @@ class NGraphEncapsulateOp : public OpKernel {
                        << " ,index: " << i << " "
                        << PrintBool(NGraphCatalog::EncapOutputNeedsCopy(
                               def().name(), i));
-        // if (m_op_backend_name != "CPU" &&
-        //     NGraphCatalog::EncapOutputNeedsCopy(def().name(), i)) {
-
-        if (m_op_backend_name != "CPU")) {
+        if (m_op_backend_name != "CPU" &&
+            NGraphCatalog::EncapOutputNeedsCopy(def().name(), i)) {
           NGRAPH_VLOG(1) << "Copying Op required for " << def().name()
                          << " ,index: " << i;
           auto ng_element_type = dst_tv->get_element_type();
