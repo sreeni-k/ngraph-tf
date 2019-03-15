@@ -71,8 +71,6 @@ static void AddInput(NodeDef* dst, StringPiece src_name, int src_slot) {
 // ...end code copied and pasted (and modified) from graph.cc
 
 Status EncapsulateClusters(Graph* graph, int graph_id) {
-  cout << "in Encapsulate clusters graph id is " << graph_id << endl;
-
 
   // A map from cluster indices to the expected device name for nodes
   // in that cluster.
@@ -329,8 +327,6 @@ Status EncapsulateClusters(Graph* graph, int graph_id) {
     }
 
     Node* n;
-    cout << "Just before create NGraphEncapsulate node graph id is " << graph_id << endl;
-    cout << "NGraphEncapsulate cluster number is " << cluster_idx << endl;
     Status status = NodeBuilder(ss.str(), "NGraphEncapsulate")
                         .Attr("ngraph_cluster", cluster_idx)
                         .Attr("_ngraph_backend", cluster_backend)

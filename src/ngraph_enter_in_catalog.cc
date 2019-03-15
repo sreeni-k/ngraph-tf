@@ -60,14 +60,10 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
   vector<Node*> ordered;
   GetReversePostOrder(*graph, &ordered);
 
-  // vector<Node*> add_graph_id;
-
   for (auto node : ordered) {
-    cout << "node is " << node->name() << endl;
     // Update the input variable map
     if (IsNGVariableType(node->type_string())) {
       string node_key = NGraphCatalog::CreateNodeKey(graph_id, node->name(), 0);
-      cout << "getting node_key is " << node_key << endl;
       string shared_name;
       TF_RETURN_IF_ERROR(GetSharedName(node, &shared_name));
       NGraphCatalog::AddCatalog(node_key, shared_name);

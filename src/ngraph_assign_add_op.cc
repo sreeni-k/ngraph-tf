@@ -104,9 +104,7 @@ class NGraphAssignAddOp : public OpKernel {
 
     // CARE ABOUT SYNCING AS WE ARE USING THE VAR TO GET THE NEW VALUE
     if (var->need_sync_ng_tensor()) {
-        cout << "Mingshan in NAssignAdd gets need_sync_ng_tensor " << endl;
-        cout << "var is " << var->DebugString() << endl;
-        NGRAPH_VLOG(1) << "ng tensor behind, needs to sync with tf-tensor";
+        NGRAPH_VLOG(1) << "In AssignAdd, ng tensor behind, needs to sync with tf-tensor";
         WriteNGTensor(var->ng_tensor(), var->tensor());
         // TODO: Is it safe to set sync as false after this sync
         var->sync_ng_tensor(false);
