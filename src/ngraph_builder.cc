@@ -20,6 +20,8 @@
 #include "ngraph_log.h"
 #include "ngraph_utils.h"
 
+#include "ngraph_backend_manager.h"
+
 #include "ngraph/builder/autobroadcast.hpp"
 #include "ngraph/builder/numpy_transpose.hpp"
 #include "ngraph/builder/quantization.hpp"
@@ -1387,6 +1389,98 @@ static Status TranslateConv3DOp(
   BatchToTensorflow3D(is_ndhwc, ng_conv);
   SaveNgOp(ng_op_map, op->name(), ng_conv);
   return Status::OK();
+}
+
+// Translate DepthToSpace op
+static Status TranslateDepthToSpaceOpNNPI(
+    const Node* op, const std::vector<const Tensor*>& static_input_map,
+    Builder::OpMap& ng_op_map) {
+  shared_ptr<ng::Node> ng_input;
+  TF_RETURN_IF_ERROR(GetInputNodes(ng_op_map, op, &ng_input));
+
+  // Get the attributes
+  int64 block_size;
+  std::string tf_data_format;
+  TF_RETURN_IF_ERROR(GetNodeAttr(op->attrs(), "block_size", &block_size));
+  TF_RETURN_IF_ERROR(GetNodeAttr(op->attrs(), "data_format", &tf_data_format));
+
+  ng::Shape input_shape = ng_input->get_shape();
+  std::map<std::string, int> format_to_int_map = {
+      {"NHWC", 0}, {"NCHW", 1}, {"NCHW_VECT_C", 1}};
+
+  int channel_dimension;
+  int num_spatial_dimensions = 2;  // H, W are spatial dimensions
+
+  switch (format_to_int_map[tf_data_format]) {
+    // NHWC
+    case 0:
+      channel_dimension = 3;
+      break;
+    // NCHW
+    case 1:
+      channel_dimension = 1;
+      break;
+    // NCHW_VEC_C
+    case 2:
+      return errors::InvalidArgument(
+          "NCHW_VECT_C is not supported in DepthToSpace for now");
+    default:
+      return errors::InvalidArgument(
+          "DepthToSpace supported data format is NCHW, NHWC, or NCHW_VECT_C");
+  }
+
+  // Error checking : depth must be divisible by square of the block_size
+  if (input_shape[channel_dimension] % (block_size * block_size) != 0) {
+    return errors::InvalidArgument(
+        "Input tensor's channel dimension ,", input_shape[channel_dimension],
+        " is not divisible by square of the block_size ", block_size);
+  }
+
+  ng::AxisVector ng_output_shape;
+
+  switch (format_to_int_map[tf_data_format]) {
+    // NHWC
+    case 0: {
+      int64 num_blocks = 1;
+      for (int i = 0; i < num_spatial_dimensions; i++) {
+        num_blocks *= block_size;
+      }
+
+      // ng_output_shape = [batch_size,
+      //                    height * block_size,
+      //                    width * block_size,
+      //                    channel / (block_size * block_size)]
+      ng_output_shape.push_back(input_shape[0]);
+      for (int i = 0; i < num_spatial_dimensions; i++) {
+        ng_output_shape.push_back(input_shape[i + 1] * block_size);
+      }
+      ng_output_shape.push_back(input_shape[channel_dimension] / num_blocks);
+      break;
+    }
+
+    // NCHW
+    case 1: {
+      int64 num_blocks = 1;
+      for (int i = 0; i < num_spatial_dimensions; i++) {
+        num_blocks *= block_size;
+      }
+
+      // ng_output_shape = [batch_size,
+      //                    channel / (block_size * block_size)
+      //                    height * block_size,
+      //                    width * block_size]
+      ng_output_shape.push_back(input_shape[0]);
+      ng_output_shape.push_back(input_shape[channel_dimension] / num_blocks);
+      for (int i = 0; i < num_spatial_dimensions; i++) {
+        ng_output_shape.push_back(input_shape[i + 2] * block_size);
+      }
+      break;
+    }
+  }
+
+  auto dts = make_shared<ngraph::runtime::nnpi::op::DepthToSpace>(
+      ng_input, block_size, ng_output_shape);
+  SaveNgOp(ng_op_map, op->name(), dts);
 }
 
 // Translate DepthToSpace op
@@ -4078,6 +4172,7 @@ const static std::map<
         {"Conv2DBackpropInput", TranslateConv2DBackpropInputOp},
         {"Conv3D", TranslateConv3DOp},
         {"DepthToSpace", TranslateDepthToSpaceOp},
+        //{"DepthToSpaceNNPI", TranslateDepthToSpaceOpNNPI},
         {"DepthwiseConv2dNative", TranslateDepthwiseConv2dNativeOp},
         {"Dequantize", TranslateDequantizeOp},
         {"Equal", TranslateBinaryOp<ngraph::op::Equal>},
@@ -4277,7 +4372,12 @@ Status Builder::TranslateGraph(
                           Builder::OpMap&)>* op_fun;
 
     try {
-      op_fun = &(TRANSLATE_OP_MAP.at(op->type_string()));
+      if (op->type_string() == "DepthToSpace"){
+        string key = op->type_string() + ((BackendManager::GetCurrentlySetBackendName()=="NNPI") ? "NNPI" : "");
+        op_fun = &(TRANSLATE_OP_MAP.at(key));
+      } else {
+        op_fun = &(TRANSLATE_OP_MAP.at(op->type_string()));
+      }
     } catch (const std::out_of_range&) {
       // -----------------------------
       // Catch-all for unsupported ops
