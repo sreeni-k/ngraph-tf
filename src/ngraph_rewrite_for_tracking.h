@@ -22,7 +22,7 @@ namespace tensorflow {
 
 namespace ngraph_bridge {
 
-Status RewriteForTracking(Graph* graph);
+Status RewriteForTracking(Graph* graph, int graph_id);
 Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
                            std::string node_new_name, bool just_looking,
                            bool outputs_ng_supported);

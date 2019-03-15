@@ -104,6 +104,8 @@ class NGraphAssignAddOp : public OpKernel {
 
     // CARE ABOUT SYNCING AS WE ARE USING THE VAR TO GET THE NEW VALUE
     if (var->need_sync_ng_tensor()) {
+        cout << "Mingshan in NAssignAdd gets need_sync_ng_tensor " << endl;
+        cout << "var is " << var->DebugString() << endl;
         NGRAPH_VLOG(1) << "ng tensor behind, needs to sync with tf-tensor";
         WriteNGTensor(var->ng_tensor(), var->tensor());
         // TODO: Is it safe to set sync as false after this sync
@@ -114,10 +116,10 @@ class NGraphAssignAddOp : public OpKernel {
     shared_ptr<ngraph::runtime::Tensor> ng_tensor_to_assign = var->ng_tensor();
     
     NGRAPH_VLOG(1) << " Before Computing ";
-    NGRAPH_VLOG(1) << " Print NG Tensor ";
-    PrintNGTensor(ng_tensor_to_assign);
-    NGRAPH_VLOG(1) << " Print TF Tensor :vartensor";
-    PrintTFTensor(*(var->tensor()));
+    //NGRAPH_VLOG(1) << " Print NG Tensor ";
+    //PrintNGTensor(ng_tensor_to_assign);
+    //NGRAPH_VLOG(1) << " Print TF Tensor :vartensor";
+    //PrintTFTensor(*(var->tensor()));
     
     // Create Backend
     BackendManager::CreateBackend(ng_backend_name_);
@@ -157,8 +159,8 @@ class NGraphAssignAddOp : public OpKernel {
                            ng_val->get_element_type().size());
     }
 
-    NGRAPH_VLOG(1) << " Print ng Value ";
-    PrintNGTensor(ng_val);
+    //NGRAPH_VLOG(1) << " Print ng Value ";
+    //PrintNGTensor(ng_val);
 
     // Create nGraph Function
     // Create Input Tensor Vector
@@ -214,8 +216,8 @@ class NGraphAssignAddOp : public OpKernel {
 
     // Assign to the variable
     ng_tensor_to_assign->copy_from(*(ng_outputs[0]));
-    NGRAPH_VLOG(1)<<"Print update Variable Value";
-    PrintNGTensor(ng_tensor_to_assign);
+    //NGRAPH_VLOG(1)<<"Print update Variable Value";
+    //PrintNGTensor(ng_tensor_to_assign);
 
 
     // 
@@ -226,12 +228,12 @@ class NGraphAssignAddOp : public OpKernel {
     if (copy_to_tf_) {
       ReadNGTensor(ng_tensor_to_assign, &old_lhs);
       NGRAPH_VLOG(1) << "Copying to TF Tensor";
-      NGRAPH_VLOG(1) << "Print ng-tensor";
-      PrintNGTensor(ng_tensor_to_assign);
+      //NGRAPH_VLOG(1) << "Print ng-tensor";
+      //PrintNGTensor(ng_tensor_to_assign);
 
-      NGRAPH_VLOG(1) << "Print tf-tensor";
-      PrintTFTensor(old_lhs);
-      PrintTFTensor(*tf_tensor);
+      //NGRAPH_VLOG(1) << "Print tf-tensor";
+      //PrintTFTensor(old_lhs);
+      //PrintTFTensor(*tf_tensor);
 
       if (just_looking_) {
         // Some tf op will just use the val

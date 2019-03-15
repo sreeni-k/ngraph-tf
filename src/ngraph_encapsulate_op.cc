@@ -586,6 +586,8 @@ class NGraphEncapsulateOp : public OpKernel {
       }
 
       if (var->need_sync_ng_tensor()) {
+        cout << "Mingshan in encapsulate gets need_sync_ng_tensor " << endl;
+        cout << "var is " << var->DebugString() << endl;
         NGRAPH_VLOG(1) << "ng tensor behind, needs to sync with tf-tensor";
         WriteNGTensor(var->ng_tensor(), var->tensor());
         // TODO: Is it safe to set sync as false after this sync, or should it

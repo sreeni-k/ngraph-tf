@@ -164,6 +164,10 @@ void NGraphVariableOp::Compute(OpKernelContext* ctx) {
   // PrintTFTensor(*(var->tensor()));
   bool just_synced = false;
   if (var->need_sync_ng_tensor()) {
+    cout << "Mingshan in tracked_variable gets need_sync_ng_tensor " << endl;
+    cout << "var is " << var->DebugString() << endl;
+    cout << "Mingshan " << def().name() << endl;
+    cout << "graph_id is " << ng_graph_id_ << endl;
     NGRAPH_VLOG(1) << "ng tensor behind, needs to sync with tf-tensor";
     WriteNGTensor(var->ng_tensor(), var->tensor());
     var->sync_ng_tensor(false);
