@@ -31,6 +31,7 @@
 #include "ngraph_freshness_tracker.h"
 #include "ngraph_utils.h"
 #include "ngraph_var.h"
+#include "ngraph_timer.h"
 
 using namespace std;
 namespace ng = ngraph;
@@ -51,6 +52,9 @@ class NGraphAssignOp : public OpKernel {
   bool just_looking_;
   bool copy_to_tf_;
   int ng_graph_id_;
+  static int s_instance_count;
+  int my_instance_id{0};
+
   // bool use_exclusive_lock_;
   // bool validate_shape_;
   // bool relax_constraints_;
@@ -73,9 +77,15 @@ class NGraphAssignOp : public OpKernel {
 
     OP_REQUIRES(context, IsRefType(context->input_type(0)),
                 errors::InvalidArgument("lhs input needs to be a ref type"));
+    my_instance_id = s_instance_count;
+    s_instance_count++;
   }
 
   void Compute(OpKernelContext* context) override {
+    std::ostringstream oss;
+    oss << "Execute: Assign_" << my_instance_id << ": " << name();
+    Event event_compute(oss.str().c_str(), name().c_str());
+
     NGRAPH_VLOG(1) << "In Assign Kernel " << def().name();
     NGRAPH_VLOG(1) << "Copy to TF " << PrintBool(copy_to_tf_);
     NGRAPH_VLOG(1) << "Just Looking " << PrintBool(just_looking_);
@@ -169,8 +179,12 @@ class NGraphAssignOp : public OpKernel {
 
     // Unref Var
     var->Unref();
+    event_compute.Stop();
+    Event::WriteTrace(event_compute);
   }
 };
+
+int NGraphAssignOp::s_instance_count = 0;
 
 REGISTER_OP("NGraphAssign")
     .Input("ref: Ref(T)")

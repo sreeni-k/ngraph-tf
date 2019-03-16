@@ -44,7 +44,6 @@ Status CaptureVariables(Graph* graph) {
   }
 
   std::vector<Node*> replaced_nodes;
-  
 
   for (auto node : graph->op_nodes()) {
     if (NGraphPlacementRequested(node)) {
@@ -115,11 +114,11 @@ Status CaptureVariables(Graph* graph) {
 
       else if (IsTFAssignType(node->type_string())) {
         NGRAPH_VLOG(1) << "Capturing: " << node->name();
-        
+
         auto node_type = node->type_string();
         auto node_replacement_type = GetNGAssignType(node_type);
-        NGRAPH_VLOG(1) << "Node Type: " << node_type <<" , Node Replacement Type "<< node_replacement_type;
-        
+        NGRAPH_VLOG(1) << "Node Type: " << node_type
+                       << " , Node Replacement Type " << node_replacement_type;
 
         DataType dtype;
         TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "T", &dtype));
@@ -130,12 +129,13 @@ Status CaptureVariables(Graph* graph) {
 
         for (auto edge : node->in_edges()) {
           if (edge == NULL) {
-            NGRAPH_VLOG(1) << "Capturing "<< node_type<<" op, but found null edge: ";
+            NGRAPH_VLOG(1) << "Capturing " << node_type
+                           << " op, but found null edge: ";
             continue;
           }
 
           if (edge->dst()->IsOp() && !edge->IsControlEdge() &&
-            IsRefType(edge->dst()->input_type(edge->dst_input()))) {
+              IsRefType(edge->dst()->input_type(edge->dst_input()))) {
             input_ref = NodeBuilder::NodeOut(edge->src(), edge->src_output());
           } else {
             input_val = NodeBuilder::NodeOut(edge->src(), edge->src_output());
@@ -153,7 +153,8 @@ Status CaptureVariables(Graph* graph) {
                                .Device(node->assigned_device_name())
                                .Finalize(graph, &replacement));
 
-        NGRAPH_VLOG(1) << "Successfully constructed "<< node_replacement_type<<" Node Def";
+        NGRAPH_VLOG(1) << "Successfully constructed " << node_replacement_type
+                       << " Node Def";
 
         replacement->set_assigned_device_name(node->assigned_device_name());
 
@@ -167,9 +168,9 @@ Status CaptureVariables(Graph* graph) {
         NGRAPH_VLOG(4) << "Getting in edges: ";
         for (auto edge : node->in_edges()) {
           NGRAPH_VLOG(4) << "Replacing: " << edge->DebugString();
-          if(edge->IsControlEdge()){
+          if (edge->IsControlEdge()) {
             graph->AddEdge(edge->src(), edge->src_output(), replacement,
-                         edge->dst_input());
+                           edge->dst_input());
             graph->RemoveEdge(edge);
           }
         }

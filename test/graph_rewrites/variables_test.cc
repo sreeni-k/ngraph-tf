@@ -246,9 +246,9 @@ TEST(Variables, SmallGraph3) {
     std::cout << "itr: " << i << " ,Result: " << ng_outputs2[0].matrix<float>()
               << std::endl;
   }
-  
+
   for (int i = 0; i < 10; i++) {
-  ASSERT_OK(ng_session.Run({apply_gradient_descent}, &ng_outputs3));
+    ASSERT_OK(ng_session.Run({apply_gradient_descent}, &ng_outputs3));
   }
   // this apply_gradient_descent result should be {{10.0,10.0},{10.0,10.0}}
   std::cout << "ApplyGradientDescent value " << ng_outputs3[0].matrix<float>()
@@ -290,7 +290,7 @@ TEST(Variables, SmallGraph3) {
               << std::endl;
   }
   for (int i = 0; i < 10; i++) {
-  ASSERT_OK(tf_session.Run({apply_gradient_descent}, &tf_outputs3));
+    ASSERT_OK(tf_session.Run({apply_gradient_descent}, &tf_outputs3));
   }
   // this apply_gradient_descent result should be {{10.0,10.0},{10.0,10.0}}
   std::cout << "ApplyGradientDescent value " << tf_outputs3[0].matrix<float>()
@@ -302,7 +302,7 @@ TEST(Variables, SmallGraph3) {
     std::cout << "itr: " << i << " ,Result: " << tf_outputs4[0].matrix<float>()
               << std::endl;
   }
-  
+
   ASSERT_OK(tf_session.Run({var}, &tf_outputs5));
   std::cout << "Final var: " << tf_outputs5[0].matrix<float>() << std::endl;
 

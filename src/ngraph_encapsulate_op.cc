@@ -611,7 +611,8 @@ class NGraphEncapsulateOp : public OpKernel {
       }
 
       if (var->need_sync_ng_tensor()) {
-        NGRAPH_VLOG(1) << "In NGEncapsulate, ng tensor behind, needs to sync with tf-tensor";
+        NGRAPH_VLOG(1) << "In NGEncapsulate, ng tensor behind, needs to sync "
+                          "with tf-tensor";
         WriteNGTensor(var->ng_tensor(), var->tensor());
         // TODO: Is it safe to set sync as false after this sync, or should it
         // be synced everytime
