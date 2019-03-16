@@ -441,7 +441,8 @@ def main():
     #-------------------------------
 
     # Component versions
-    ngraph_version = "v0.15.0"
+    #ngraph_version = "v0.15.0"
+    ngraph_version = "sarkars/bypass"
     tf_version = "v1.12.0"
 
     # Default directories

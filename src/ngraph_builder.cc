@@ -33,6 +33,8 @@
 #include "tensorflow/core/graph/edgeset.h"
 #include "tensorflow/core/lib/core/errors.h"
 
+#include "ngraph_backend_manager.h"
+
 #if defined(NGRAPH_DISTRIBUTED)
 #include <mpi.h>
 #endif
@@ -4174,6 +4176,13 @@ Status Builder::TranslateGraph(
   // We will visit ops in topological order.
   //
   // ought to be `const Node*`, but GetReversePostOrder doesn't use `const`
+
+  DL_HANDLE handle = ng::runtime::Backend::get_handlex(BackendManager::GetCurrentlySetBackendName());
+
+  // Need code in nnpi, (a factory function)
+
+  //*(void**)(&func_print_name) = dlsym(handle, "print_name");
+
 
   vector<Node*> ordered;
   GetReversePostOrder(*input_graph, &ordered);
