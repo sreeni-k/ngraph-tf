@@ -58,7 +58,7 @@ unordered_map<string, int> deassigned_histogram;
 int num_nodes_marked_before_deassign = 0;
 
 static void MaybeLogPlacement(const Graph* graph) {
-  if (!config::IsLoggingPlacement()) return;
+  //if (!config::IsLoggingPlacement()) return;
 
   std::map<int, std::set<const Node*>> final_cluster_map;
   int number_of_nodes = 0, nodes_marked_for_clustering = 0,
@@ -91,6 +91,7 @@ static void MaybeLogPlacement(const Graph* graph) {
                   num_nodes_marked_before_deassign)
           : 0;
 
+  /*
   std::cout << "\n";  // insert a new line at the start of NGTF_SUMMARY
   std::cout << "NGTF_SUMMARY: Number of nodes in the graph: " << number_of_nodes
             << std::endl;
@@ -113,6 +114,7 @@ static void MaybeLogPlacement(const Graph* graph) {
                                           float(num_encapsulates))
                                        : 0)
             << endl;
+  
 
   for (auto kv : final_cluster_map) {
     int cluster_idx = kv.first;
@@ -126,6 +128,7 @@ static void MaybeLogPlacement(const Graph* graph) {
   std::cout << "NGTF_SUMMARY: Op_deassigned: ";
   print_node_histogram(deassigned_histogram);
   std::cout << "\n" << endl;  // insert a line between summary and op placement
+  */
 
   for (auto kv : final_cluster_map) {
     int cluster_idx = kv.first;

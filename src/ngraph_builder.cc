@@ -35,6 +35,9 @@
 
 #include "ngraph_backend_manager.h"
 
+#include <dlfcn.h>
+
+
 #if defined(NGRAPH_DISTRIBUTED)
 #include <mpi.h>
 #endif
@@ -1549,11 +1552,295 @@ static Status TranslateDepthToSpaceOp(
   return Status::OK();
 }
 
+
+// Translate DepthToSpace op
+static Status TranslateDepthToSpaceOpNNPI(
+    const Node* op, const std::vector<const Tensor*>& static_input_map,
+    Builder::OpMap& ng_op_map) {
+  shared_ptr<ng::Node> ng_input;
+  // TODO: untested
+  TF_RETURN_IF_ERROR(GetInputNodes(ng_op_map, op, &ng_input));
+
+  // Get the attributes
+  int64 block_size;
+  std::string tf_data_format;
+  TF_RETURN_IF_ERROR(GetNodeAttr(op->attrs(), "block_size", &block_size));
+  TF_RETURN_IF_ERROR(GetNodeAttr(op->attrs(), "data_format", &tf_data_format));
+
+  ng::Shape input_shape = ng_input->get_shape();
+  std::map<std::string, int> format_to_int_map = {
+      {"NHWC", 0}, {"NCHW", 1}, {"NCHW_VECT_C", 1}};
+
+  int channel_dimension;
+  int num_spatial_dimensions = 2;  // H, W are spatial dimensions
+
+  switch (format_to_int_map[tf_data_format]) {
+    // NHWC
+    case 0:
+      channel_dimension = 3;
+      break;
+    // NCHW
+    case 1:
+      channel_dimension = 1;
+      break;
+    // NCHW_VEC_C
+    case 2:
+      return errors::InvalidArgument(
+          "NCHW_VECT_C is not supported in DepthToSpace for now");
+    default:
+      return errors::InvalidArgument(
+          "DepthToSpace supported data format is NCHW, NHWC, or NCHW_VECT_C");
+  }
+
+  // Error checking : depth must be divisible by square of the block_size
+  if (input_shape[channel_dimension] % (block_size * block_size) != 0) {
+    return errors::InvalidArgument(
+        "Input tensor's channel dimension ,", input_shape[channel_dimension],
+        " is not divisible by square of the block_size ", block_size);
+  }
+
+  ng::AxisVector ng_output_shape;
+
+  switch (format_to_int_map[tf_data_format]) {
+    // NHWC
+    case 0: {
+      int64 num_blocks = 1;
+      for (int i = 0; i < num_spatial_dimensions; i++) {
+        num_blocks *= block_size;
+      }
+
+      // ng_output_shape = [batch_size,
+      //                    height * block_size,
+      //                    width * block_size,
+      //                    channel / (block_size * block_size)]
+      ng_output_shape.push_back(input_shape[0]);
+      for (int i = 0; i < num_spatial_dimensions; i++) {
+        ng_output_shape.push_back(input_shape[i + 1] * block_size);
+      }
+      ng_output_shape.push_back(input_shape[channel_dimension] / num_blocks);
+      break;
+    }
+
+    // NCHW
+    case 1: {
+      int64 num_blocks = 1;
+      for (int i = 0; i < num_spatial_dimensions; i++) {
+        num_blocks *= block_size;
+      }
+
+      // ng_output_shape = [batch_size,
+      //                    channel / (block_size * block_size)
+      //                    height * block_size,
+      //                    width * block_size]
+      ng_output_shape.push_back(input_shape[0]);
+      ng_output_shape.push_back(input_shape[channel_dimension] / num_blocks);
+      for (int i = 0; i < num_spatial_dimensions; i++) {
+        ng_output_shape.push_back(input_shape[i + 2] * block_size);
+      }
+      break;
+    }
+  }
+
+  //auto dts = make_shared<ngraph::runtime::nnpi::op::DepthToSpace>(
+  //    ng_input, block_size, ng_output_shape);
+
+  DL_HANDLE handle = ng::runtime::Backend::get_handlex(BackendManager::GetCurrentlySetBackendName());
+  std::shared_ptr<ngraph::Node> (*func_construct_node)(shared_ptr<ngraph::Node>, int64, ng::AxisVector);
+  *(void **)(&func_construct_node) = dlsym(handle, "construct_node");
+  auto dts = (*func_construct_node)(ng_input, block_size, ng_output_shape);
+
+  SaveNgOp(ng_op_map, op->name(), dts);
+  return Status::OK();
+}
+
+Status get_backend(string& backend_env) {
+  const char* ng_backend_env_value = std::getenv("NGRAPH_TF_BACKEND");
+  if (ng_backend_env_value != nullptr) {
+    backend_env = std::string(ng_backend_env_value);
+  } else {
+    return errors::Internal("NGRAPH_TF_BACKEND not set");
+  }
+  return Status::OK();
+}
+
+static Status TranslateDepthwiseConv2dNativeOpNNPI(
+    const Node* op, const std::vector<const Tensor*>& static_input_map,
+    Builder::OpMap& ng_op_map) {
+  shared_ptr<ng::Node> ng_input, ng_filter;
+  TF_RETURN_IF_ERROR(GetInputNodes(ng_op_map, op, &ng_input, &ng_filter));
+
+  cout << "\n \n ======== NEW TranslateDepthwiseConv2dNativeOp (NNPI) ====== \n \n";
+
+  std::vector<int32> tf_strides;
+  std::vector<int32> tf_dilations;
+  std::string tf_padding_type;
+  std::string tf_data_format;
+  TF_RETURN_IF_ERROR(GetNodeAttr(op->attrs(), "strides", &tf_strides));
+  TF_RETURN_IF_ERROR(GetNodeAttr(op->attrs(), "dilations", &tf_dilations));
+  TF_RETURN_IF_ERROR(GetNodeAttr(op->attrs(), "padding", &tf_padding_type));
+  TF_RETURN_IF_ERROR(GetNodeAttr(op->attrs(), "data_format", &tf_data_format));
+
+  if (tf_data_format != "NHWC" && tf_data_format != "NCHW") {
+    return errors::InvalidArgument(
+        "DepthwiseConv2D data format is neither NHWC nor NCHW");
+  }
+
+  bool is_nhwc = (tf_data_format == "NHWC");
+
+  NGRAPH_VLOG(3) << ng::join(tf_strides);
+  NGRAPH_VLOG(3) << ng::join(tf_dilations);
+  NGRAPH_VLOG(3) << tf_padding_type;
+  NGRAPH_VLOG(3) << tf_data_format;
+
+  ng::Strides ng_strides(2);
+  ng::Strides ng_dilations(2);
+  ng::Shape ng_image_shape(2);
+  ng::Shape ng_kernel_shape(2);
+
+  BatchedOpParamToNGraph(is_nhwc, ng_input->get_shape(), ng_image_shape);
+  BatchedOpParamToNGraph(is_nhwc, tf_strides, ng_strides);
+  BatchedOpParamToNGraph(is_nhwc, tf_dilations, ng_dilations);
+  BatchToNGraph(is_nhwc, ng_input);
+
+  NGRAPH_VLOG(3) << "ng_strides: " << ng::join(ng_strides);
+  NGRAPH_VLOG(3) << "ng_dilations: " << ng::join(ng_dilations);
+  NGRAPH_VLOG(3) << "ng_image_shape: " << ng::join(ng_image_shape);
+
+  auto& ng_filter_shape = ng_filter->get_shape();
+  ng_kernel_shape[0] = ng_filter_shape[0];
+  ng_kernel_shape[1] = ng_filter_shape[1];
+  Reshape<3, 2, 0, 1>(ng_filter);
+
+  NGRAPH_VLOG(3) << "ng_kernel_shape: " << ng::join(ng_kernel_shape);
+
+  ng::CoordinateDiff ng_padding_below{0, 0};
+  ng::CoordinateDiff ng_padding_above{0, 0};
+
+  Builder::MakePadding(tf_padding_type, ng_image_shape, ng_kernel_shape,
+                       ng_strides, ng_dilations, ng_padding_below,
+                       ng_padding_above);
+
+  // ng input shape is NCHW
+  auto& input_shape = ng_input->get_shape();
+  // ng filter shape is OIHW
+  auto& filter_shape = ng_filter->get_shape();
+  ng::NodeVector ng_args;
+
+  if (true){
+
+      for (size_t i = 0; i < input_shape[1]; i++) {
+      const std::vector<size_t> lower_bound{0, i, 0, 0};
+      const std::vector<size_t> upper_bound{input_shape[0], i + 1, input_shape[2],
+                                            input_shape[3]};
+      auto ng_sliced_input =
+          make_shared<ng::op::Slice>(ng_input, lower_bound, upper_bound);
+
+      const std::vector<size_t> f_lower_bound{0, i, 0, 0};
+      const std::vector<size_t> f_upper_bound{filter_shape[0], i + 1,
+                                              filter_shape[2], filter_shape[3]};
+      auto ng_sliced_filter =
+          make_shared<ng::op::Slice>(ng_filter, f_lower_bound, f_upper_bound);
+
+      NGRAPH_VLOG(3) << "depthwise conv 2d.";
+      NGRAPH_VLOG(3) << "sliced shape " << ng::join(ng_sliced_input->get_shape());
+      NGRAPH_VLOG(3) << "filter shape "
+                    << ng::join(ng_sliced_filter->get_shape());
+
+      auto ng_conv = make_shared<ng::op::Convolution>(
+          ng_sliced_input, ng_sliced_filter, ng_strides, ng_dilations,
+          ng_padding_below, ng_padding_above);
+      ng_args.push_back(ng_conv);
+    }
+
+    size_t ng_concatenation_axis = 1;  // channel axis
+    std::shared_ptr<ng::Node> ng_concat =
+        make_shared<ng::op::Concat>(ng_args, ng_concatenation_axis);
+
+    BatchToTensorflow(is_nhwc, ng_concat);
+    SaveNgOp(ng_op_map, op->name(), ng_concat);
+
+    string backend_name;
+    TF_RETURN_IF_ERROR(get_backend(backend_name));
+    cout << "backend_name:: " << backend_name << std::endl;
+    DL_HANDLE handle = ng::runtime::Backend::get_handlex(backend_name);
+    cout << "Error on dlopen (get_handlex): " << dlerror() << "\n";
+    cout << std::endl;
+    if (!handle) {
+      return errors::Internal("FAILED TO GET SHARED LIB HANDLE FOR ", backend_name);
+    }
+    int (*loaded_func_ptr)(int, int);
+    // *(void **)(&func_construct_node) = dlsym(handle, "sum");
+    cout << "==========" << std::endl;
+    *(void**)(&loaded_func_ptr) = dlsym(handle, "sumaaaabbbb");
+    if (!dlsym(handle, "sumaaaabbbb")) {
+      cout << "Error on dlsym: " << dlerror() << std::endl;
+      cout << "#########" << std::endl; 
+      return errors::Internal("FAILED TO LOAD FUNCTION sumaaaabbbb");
+    }
+    cout << "About to run sumaaaabbbb function\n";
+    auto result = (*loaded_func_ptr)(1, 2);
+    cout << "The sum of 1 and 2 is " << result << " surprise, surprise!\n" << std::endl;
+
+    size_t groups = filter_shape[0];
+    // TODO: output shape computation needs to be done right (taking into account padding and strides)
+    // TODO: the output shape should be computed at the backend, in that case
+    ng::Shape output_shape{input_shape[0], input_shape[1] * filter_shape[0], input_shape[2], input_shape[3]};
+
+    std::shared_ptr<ng::Node> (*func_construct_node)(shared_ptr<ng::Node>, shared_ptr<ng::Node>, ng::Strides, ng::Strides, ng::CoordinateDiff, ng::CoordinateDiff, ng::Strides, size_t, ng::Shape);
+    *(void **)(&func_construct_node) = dlsym(handle, "construct_groupconvolution");
+    auto grouped_conv = (*func_construct_node)(ng_input, ng_filter, ng_strides, ng_dilations, ng_padding_below, ng_padding_above, ng::Strides(), groups, output_shape);
+
+    cout << "USING NNPI's GROUPED convolution. yayyyy!! \n" << std::endl;
+    //SaveNgOp(ng_op_map, op->name(), grouped_conv);
+    cout << "!!!!!!!!!!!!!!!!! \n" << std::endl;
+
+
+    /*
+    ng::runtime::Backend* op_backend = BackendManager::GetBackend(backend_name);
+    cout << "Adding using sumxxxxyyyy:: 10 + 20 = " << op_backend->sumxxxxyyyy(10, 20) << "\n" << std::endl;
+
+    auto a_ng_node = op_backend->construct_node<ng::op::Concat>(ng_args, ng_concatenation_axis);
+    BatchToTensorflow(is_nhwc, a_ng_node);
+    SaveNgOp(ng_op_map, op->name(), a_ng_node);
+    */
+
+    //auto a_gc_node = op_backend->construct_node<runtime::nnpi::op::GroupConvolution>(ng_input, ng_filter, ng_strides, ng_dilations, ng_padding_below, ng_padding_above, ng::Strides(), groups, output_shape);
+
+  } else {
+
+
+
+    size_t groups = filter_shape[0];
+    // TODO: output shape computation needs to be done right (taking into account padding and strides)
+    // TODO: the output shape should be computed at the backend, in that case
+    ng::Shape output_shape{input_shape[0], input_shape[1] * filter_shape[0], input_shape[2], input_shape[3]};
+
+
+    // TODO: movethis reading of construct_node to a common function
+    DL_HANDLE handle = ng::runtime::Backend::get_handlex(BackendManager::GetCurrentlySetBackendName());
+    
+    std::shared_ptr<ng::Node> (*func_construct_node)(shared_ptr<ng::Node>, shared_ptr<ng::Node>, ng::Strides, ng::Strides, ng::CoordinateDiff, ng::CoordinateDiff, ng::Strides, size_t, ng::Shape);
+    *(void **)(&func_construct_node) = dlsym(handle, "construct_node");
+    auto grouped_conv = (*func_construct_node)(ng_input, ng_filter, ng_strides, ng_dilations, ng_padding_below, ng_padding_above, ng::Strides(), groups, output_shape);
+
+
+    cout << "XYXYXYXY 3\n";
+    BatchToTensorflow(is_nhwc, grouped_conv);
+    SaveNgOp(ng_op_map, op->name(), grouped_conv);
+  }
+
+  return Status::OK();
+}
+
+
+
 static Status TranslateDepthwiseConv2dNativeOp(
     const Node* op, const std::vector<const Tensor*>& static_input_map,
     Builder::OpMap& ng_op_map) {
   shared_ptr<ng::Node> ng_input, ng_filter;
   TF_RETURN_IF_ERROR(GetInputNodes(ng_op_map, op, &ng_input, &ng_filter));
+
+  cout << "\n \n ======== OLD TranslateDepthwiseConv2dNativeOp ====== \n \n";
 
   std::vector<int32> tf_strides;
   std::vector<int32> tf_dilations;
@@ -4078,7 +4365,9 @@ const static std::map<
         {"Conv2DBackpropInput", TranslateConv2DBackpropInputOp},
         {"Conv3D", TranslateConv3DOp},
         {"DepthToSpace", TranslateDepthToSpaceOp},
+        {"DepthToSpaceNNPI", TranslateDepthToSpaceOpNNPI}, // TODO: untested
         {"DepthwiseConv2dNative", TranslateDepthwiseConv2dNativeOp},
+        {"DepthwiseConv2dNativeNNPI", TranslateDepthwiseConv2dNativeOpNNPI},
         {"Dequantize", TranslateDequantizeOp},
         {"Equal", TranslateBinaryOp<ngraph::op::Equal>},
         {"Exp", TranslateUnaryOp<ngraph::op::Exp>},
@@ -4177,11 +4466,8 @@ Status Builder::TranslateGraph(
   //
   // ought to be `const Node*`, but GetReversePostOrder doesn't use `const`
 
-  DL_HANDLE handle = ng::runtime::Backend::get_handlex(BackendManager::GetCurrentlySetBackendName());
-
+  //DL_HANDLE handle = ng::runtime::Backend::get_handlex(BackendManager::GetCurrentlySetBackendName());
   // Need code in nnpi, (a factory function)
-
-  //*(void**)(&func_print_name) = dlsym(handle, "print_name");
 
 
   vector<Node*> ordered;
@@ -4284,7 +4570,20 @@ Status Builder::TranslateGraph(
                           Builder::OpMap&)>* op_fun;
 
     try {
-      op_fun = &(TRANSLATE_OP_MAP.at(op->type_string()));
+      //op_fun = &(TRANSLATE_OP_MAP.at(op->type_string()));
+      cout << "XXXXXX:: " << op->type_string() << " " << (op->type_string() == "DepthwiseConv2dNative") << "\n";
+      if (op->type_string() == "DepthToSpace" || op->type_string() == "DepthwiseConv2dNative"){
+
+        string backend_name;
+      TF_RETURN_IF_ERROR(get_backend(backend_name));
+
+        string key = op->type_string() + ((backend_name=="NNPI") ? "NNPI" : "");
+        cout << "YYYYY:: " << op->type_string() << " " << (op->type_string() == "DepthwiseConv2dNative") << "  -- " << key << "\n";
+        cout << "BACKEND::: " << backend_name << "\n";
+        op_fun = &(TRANSLATE_OP_MAP.at(key));
+      } else {
+        op_fun = &(TRANSLATE_OP_MAP.at(op->type_string()));
+      }
     } catch (const std::out_of_range&) {
       // -----------------------------
       // Catch-all for unsupported ops
