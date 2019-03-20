@@ -234,6 +234,13 @@ class NGraphEncapsulationPass : public NGraphRewritePass {
       return Status::OK();
     }
 
+    // 0. Replace optimizers then, if requested, dump the graphs.
+    TF_RETURN_IF_ERROR(ReplaceOptimizers(options.graph->get(), idx ));
+    if (DumpMarkedGraphs()) {
+      DumpGraphs(options, idx, "replaced_modifier", "Graph with Modifiers replaced");
+    }
+
+
     // 1. Mark for clustering then, if requested, dump the graphs.
     TF_RETURN_IF_ERROR(MarkForClustering(options.graph->get()));
     if (DumpMarkedGraphs()) {
