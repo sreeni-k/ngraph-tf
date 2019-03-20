@@ -2230,9 +2230,32 @@ static Status TranslateMatMulOp(
     ng_rhs = ng::builder::numpy_transpose(ng_rhs, ng::AxisVector{1, 0});
   }
 
-  // The default axis count for nGraph's Dot op is 1, which is just what
-  // we need here.
-  SaveNgOp(ng_op_map, op->name(), make_shared<ngraph::op::Dot>(ng_lhs, ng_rhs));
+  string backend_name;
+  TF_RETURN_IF_ERROR(get_backend(backend_name));
+  if (backend_name == "NNPI") {
+    DL_HANDLE handle = ng::runtime::Backend::get_handlex(backend_name);
+    if (!handle) {
+      return errors::Internal("FAILED TO GET SHARED LIB HANDLE FOR ", backend_name);
+    }
+    std::shared_ptr<ng::Node> (*func_construct_node)(std::shared_ptr<ng::Node>, std::shared_ptr<ng::Node>, std::shared_ptr<ng::Node>, size_t, ng::Shape);
+    *(void **)(&func_construct_node) = dlsym(handle, "construct_dotbias");
+    DataType dtype;
+    TF_RETURN_IF_ERROR(GetNodeAttr(op->attrs(), "T", &dtype));
+    ng::element::Type ng_et;
+    TF_RETURN_IF_ERROR(TFDataTypeToNGraphElementType(dtype, &ng_et));
+
+    auto zero = make_shared<ng::op::Constant>(
+      ng_rhs->get_element_type(), ng_rhs->get_shape(),
+      std::vector<std::string>(ng::shape_size(ng_rhs->get_shape()), "0"));
+
+    auto dotbias = (*func_construct_node)(ng_lhs, ng_rhs, zero, 0, ng_rhs->get_shape());
+    SaveNgOp(ng_op_map, op->name(), dotbias);
+  } else {
+    // The default axis count for nGraph's Dot op is 1, which is just what
+    // we need here.
+    SaveNgOp(ng_op_map, op->name(), make_shared<ngraph::op::Dot>(ng_lhs, ng_rhs));
+  }
+
   return Status::OK();
 }
 
