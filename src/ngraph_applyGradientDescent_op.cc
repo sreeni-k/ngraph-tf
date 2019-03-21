@@ -32,6 +32,7 @@
 #include "ngraph_freshness_tracker.h"
 #include "ngraph_utils.h"
 #include "ngraph_var.h"
+#include "ngraph_timer.h"
 
 using namespace std;
 // using namespace ngraph;
@@ -55,6 +56,8 @@ class NGraphApplyGradientDescentOp : public OpKernel {
   string ng_backend_name_;
   std::unordered_map<std::string, std::shared_ptr<ngraph::runtime::Executable>>
       ng_exec_map;
+  int my_instance_id{0};
+  static int s_instance_count;
 
  public:
   explicit NGraphApplyGradientDescentOp(OpKernelConstruction* context)
@@ -72,6 +75,9 @@ class NGraphApplyGradientDescentOp : public OpKernel {
     NGRAPH_VLOG(1) << "Constructing NGraphApplyGradientDescent " << def().name()
                    << ": just looking? " << just_looking_ << " ,copy-to-tf "
                    << copy_to_tf_;
+
+    my_instance_id = s_instance_count;
+    s_instance_count++;
   }
 
   //---------------------------------------------------------------------------
@@ -84,6 +90,10 @@ class NGraphApplyGradientDescentOp : public OpKernel {
   }
 
   void Compute(OpKernelContext* context) override {
+    std::ostringstream oss;
+    oss << "Execute: NGApplyGradientDescent compute" << my_instance_id << ": " << name();
+    Event event_compute(oss.str().c_str(), name().c_str());
+
     NGRAPH_VLOG(1) << "In NGraphApplyGradientDescent Compute";
     NGRAPH_VLOG(1) << "Copy to TF " << PrintBool(copy_to_tf_);
     NGRAPH_VLOG(1) << "Just Looking " << PrintBool(just_looking_);
@@ -292,9 +302,12 @@ class NGraphApplyGradientDescentOp : public OpKernel {
 
     // Unref Var
     var->Unref();
-
+    event_compute.Stop();
+    Event::WriteTrace(event_compute);
   }  // end of compute function
 };   // end of NGraphApplyGradientDescent class definition
+
+int NGraphApplyGradientDescentOp::s_instance_count = 0;
 
 REGISTER_OP("NGraphApplyGradientDescent")
     .Input("var: Ref(T)")

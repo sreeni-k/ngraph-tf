@@ -543,6 +543,7 @@ class NGraphEncapsulateOp : public OpKernel {
 
     // Allocate tensors for the output results.
     Event event_alloc_output("Output: maybe create", name().c_str());
+
     vector<shared_ptr<ng::runtime::Tensor>> ng_outputs;
     int ng_output_tensor_size_in_bytes = 0;
 
@@ -562,6 +563,7 @@ class NGraphEncapsulateOp : public OpKernel {
       for (auto dim : ng_shape) {
         dims.push_back(dim);
       }
+
       TensorShape tf_shape(dims);
       Tensor* output_tensor = nullptr;
       OP_REQUIRES_OK(ctx, ctx->allocate_output(i, tf_shape, &output_tensor));
@@ -591,6 +593,8 @@ class NGraphEncapsulateOp : public OpKernel {
       ng_outputs.push_back(current_ng_tensor);
     }
 
+    Event event_output_check_in_catalog("Output: check in catalog", name().c_str());
+
     for (int input_index = 0; input_index < input_shapes.size();
          input_index++) {
       bool ref_exists =
@@ -599,6 +603,7 @@ class NGraphEncapsulateOp : public OpKernel {
       if (!ref_exists) {
         continue;
       }
+
       string get_ref_var_name = NGraphCatalog::GetInputSharedName(
           m_graph_id, def().name(), input_index);
       NGraphVar* var;
@@ -609,13 +614,17 @@ class NGraphEncapsulateOp : public OpKernel {
       } else {
         NGRAPH_VLOG(1) << " Not Found var in encapsulate";
       }
-
+      
       if (var->need_sync_ng_tensor()) {
+        Event event_sync_ng_tf_tensors("Output: ng_tensor and tf_tensor sync", name().c_str());
+
         NGRAPH_VLOG(1) << "In NGEncapsulate, ng tensor behind, needs to sync "
                           "with tf-tensor";
         WriteNGTensor(var->ng_tensor(), var->tensor());
         // TODO: Is it safe to set sync as false after this sync, or should it
         // be synced everytime
+        event_sync_ng_tf_tensors.Stop();
+        Event::WriteTrace(event_sync_ng_tf_tensors);
       }
 
       ng_inputs[input_index] = var->ng_tensor();
@@ -624,6 +633,8 @@ class NGraphEncapsulateOp : public OpKernel {
       PrintNGTensor(ng_inputs[input_index]);
       var->Unref();
     }
+    event_output_check_in_catalog.Stop();
+    Event::WriteTrace(event_output_check_in_catalog);
 
     NGRAPH_VLOG(4)
         << "NGraphEncapsulateOp::Compute allocated result tensors for cluster "
@@ -721,8 +732,10 @@ class NGraphEncapsulateOp : public OpKernel {
           // TODO: if the output is required by only other ng-encapsulates or
           // ng-variable types then
           // we dont need the copy
+          Event event_individual_copy_output("Individual Output Copy back", name().c_str());
           dst_tv->read(dst_ptr, 0,
                        dst_tv->get_element_count() * ng_element_type.size());
+          event_individual_copy_output.Stop();
         }
       }
     } catch (const std::exception& exp) {
