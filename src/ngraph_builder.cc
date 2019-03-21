@@ -2247,16 +2247,16 @@ static Status TranslateMatMulOp(
     auto zero1 = make_shared<ng::op::Constant>(
       ng_rhs->get_element_type(), ng_rhs->get_shape(),
       std::vector<std::string>(ng::shape_size(ng_rhs->get_shape()), "0"));
-    //auto shp = ng::Shape{ng_lhs->get_shape()[0], ng_rhs->get_shape()[1]};
-    auto shp = ng::Shape{};
+    auto shp = ng::Shape{ng_lhs->get_shape()[0], ng_rhs->get_shape()[1]};
+    //auto shp = ng::Shape{};
     auto zero2 = make_shared<ng::op::Constant>(
       ng_rhs->get_element_type(), shp,
-      std::vector<std::string>(ng::shape_size(shp), "0"));
+      std::vector<std::string>(ng::shape_size(shp), "1"));
 
     std::cout << "ZERO shapes:: " << ng_lhs->get_shape() << " " << ng_rhs->get_shape() << " " << zero1->get_shape() << " " << zero2->get_shape() << endl;
 
     // TODO: the second arg should be ng_rhs, not zero. but for now passing zero to satisfy dotbias
-    auto dotbias = (*func_construct_node)(ng_lhs, zero1, zero2, 0, ng_rhs->get_shape());
+    auto dotbias = (*func_construct_node)(ng_lhs, zero1, zero2, 0, zero2->get_shape());
     SaveNgOp(ng_op_map, op->name(), dotbias);
   } else {
     // The default axis count for nGraph's Dot op is 1, which is just what
