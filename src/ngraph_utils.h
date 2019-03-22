@@ -54,7 +54,6 @@ std::string PrintBool(bool var);
 void WriteNGTensor(shared_ptr<ng::runtime::Tensor> ng_tensor,
                    Tensor* tf_tensor);
 
-
 void SummarizeOp(OpKernelConstruction* ctx, std::ostream& out);
 
 // Node-types that operate on a variable

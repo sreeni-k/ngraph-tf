@@ -27,7 +27,7 @@
 #include "ngraph_mark_for_clustering.h"
 #include "ngraph_rewrite_for_tracking.h"
 #include "tf_graph_writer.h"
-
+#include "ngraph_replace_optimizers.h"
 #include <iomanip>
 
 #if defined NGRAPH_DISTRIBUTED
@@ -235,11 +235,11 @@ class NGraphEncapsulationPass : public NGraphRewritePass {
     }
 
     // 0. Replace optimizers then, if requested, dump the graphs.
-    TF_RETURN_IF_ERROR(ReplaceOptimizers(options.graph->get(), idx ));
+    TF_RETURN_IF_ERROR(ReplaceOptimizers(options.graph->get(), idx));
     if (DumpMarkedGraphs()) {
-      DumpGraphs(options, idx, "replaced_modifier", "Graph with Modifiers replaced");
+      DumpGraphs(options, idx, "replaced_modifier",
+                 "Graph with Modifiers replaced");
     }
-
 
     // 1. Mark for clustering then, if requested, dump the graphs.
     TF_RETURN_IF_ERROR(MarkForClustering(options.graph->get()));

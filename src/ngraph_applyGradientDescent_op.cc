@@ -112,7 +112,8 @@ class NGraphApplyGradientDescentOp : public OpKernel {
     // CARE ABOUT SYNCING HERE SINCE WE ARE USING NGVariable value for
     // computation
     if (var->need_sync_ng_tensor()) {
-      NGRAPH_VLOG(1) << "in ApplyGradientDescent, ng tensor behind, needs to sync with tf-tensor";
+      NGRAPH_VLOG(1) << "in ApplyGradientDescent, ng tensor behind, needs to "
+                        "sync with tf-tensor";
       WriteNGTensor(var->ng_tensor(), var->tensor());
       // TODO: Is it safe to set sync as false after this sync
       var->sync_ng_tensor(false);
@@ -256,28 +257,17 @@ class NGraphApplyGradientDescentOp : public OpKernel {
 
     // Assign to the variable
     ng_tensor_to_assign->copy_from(*ng_outputs[0]);
-    //NGRAPH_VLOG(1) << "Print updated tensor value after ApplyGradientDescent";
-    //NGRAPH_VLOG(1) << "ng_tensor_to_assign " << ng_tensor_to_assign;
-    // PrintNGTensor(ng_tensor_to_assign);
-
+    
     // Set the output
     context->forward_ref_input_to_ref_output(0, 0);
 
     mutex_lock l(*context->input_ref_mutex(0));
     Tensor old_lhs = context->mutable_input(0, /* lock_held */ true);
 
-    // NGRAPH_VLOG(1) << " Print TF Tensor ";
-    // PrintTFTensor(old_lhs);
-
     // Update the tf tensor alsoe
     if (copy_to_tf_) {
       ReadNGTensor(ng_tensor_to_assign, &old_lhs);
       NGRAPH_VLOG(1) << "Copying to TF Tensor";
-      //NGRAPH_VLOG(1) << "Print ng-tensor";
-      //PrintNGTensor(ng_tensor_to_assign);
-
-      //NGRAPH_VLOG(1) << "Print tf-tensor";
-      //PrintTFTensor(old_lhs);
 
       if (just_looking_) {
         // Some tf op will just use the val

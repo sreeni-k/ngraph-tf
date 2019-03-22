@@ -52,12 +52,13 @@ void PrintNGTensor(std::shared_ptr<ng::runtime::Tensor> ng_tensor) {
   // void* current_dst_ptr = DMAHelper::base(&tf_temp_tensor);
   // ng_tensor->read(current_dst_ptr, 0, ng_tensor->get_element_count() *
   //                                         ng_tensor->get_element_type().size());
-  // NGRAPH_VLOG(1) << "all tensor values" << (tf_temp_tensor).SummarizeValue(64)
+  // NGRAPH_VLOG(1) << "all tensor values" <<
+  // (tf_temp_tensor).SummarizeValue(64)
   //                << endl;
 }
 
 void PrintTFTensor(Tensor& T1) {
-  //NGRAPH_VLOG(1) << "all tensor values" << (T1).SummarizeValue(64) << endl;
+  // NGRAPH_VLOG(1) << "all tensor values" << (T1).SummarizeValue(64) << endl;
 }
 
 std::string DebugNode(Node* node) {
@@ -74,19 +75,23 @@ bool IsNGVariableType(string node_type) {
           node_type == "NGraphApplyGradientDescent");
 };
 
-bool IsTFAssignType(string node_type){
-  return (node_type == "Assign" || node_type=="AssignSub" || node_type=="AssignAdd");
+bool IsTFAssignType(string node_type) {
+  return (node_type == "Assign" || node_type == "AssignSub" ||
+          node_type == "AssignAdd");
 };
 
-bool IsNGAssignType(string node_type){
-  return (node_type == "NGraphAssign" || node_type=="NGraphAssignSub" || node_type=="NGraphAssignAdd");
+bool IsNGAssignType(string node_type) {
+  return (node_type == "NGraphAssign" || node_type == "NGraphAssignSub" ||
+          node_type == "NGraphAssignAdd");
 };
 
-string GetNGAssignType(string tf_node_type){
-  static map<string, string> assing_ops_replacement_map ={{"Assign", "NGraphAssign" }, {"AssignSub", "NGraphAssignSub"}, {"AssignAdd", "NGraphAssignAdd" } } ;
+string GetNGAssignType(string tf_node_type) {
+  static map<string, string> assing_ops_replacement_map = {
+      {"Assign", "NGraphAssign"},
+      {"AssignSub", "NGraphAssignSub"},
+      {"AssignAdd", "NGraphAssignAdd"}};
   return assing_ops_replacement_map[tf_node_type];
 }
-
 
 void ReadNGTensor(shared_ptr<ng::runtime::Tensor> ng_tensor,
                   Tensor* tf_tensor) {

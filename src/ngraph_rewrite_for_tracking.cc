@@ -40,7 +40,7 @@ Status ReplaceNGraphVariable(Graph* graph, Node* node, Node** replacement,
 
   std::string container;
   std::string shared_name;
-  //int graph_id;
+  // int graph_id;
   std::string backend_name;
 
   if (GetNodeAttr(node->attrs(), "container", &container) != Status::OK()) {
@@ -50,7 +50,8 @@ Status ReplaceNGraphVariable(Graph* graph, Node* node, Node** replacement,
     shared_name = "";
   }
 
-  // TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "ngraph_graph_id", &graph_id));
+  // TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "ngraph_graph_id",
+  // &graph_id));
 
   TF_RETURN_IF_ERROR(
       GetNodeAttr(node->attrs(), "_ngraph_backend", &backend_name));
@@ -94,12 +95,13 @@ Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
                            bool outputs_ng_supported, int graph_id) {
   NGRAPH_VLOG(1) << "Replacing  " << node->name();
   auto node_type = node->type_string();
-  
+
   DataType dtype;
   TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "T", &dtype));
 
-  //int graph_id;
-  // TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "ngraph_graph_id", &graph_id));
+  // int graph_id;
+  // TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "ngraph_graph_id",
+  // &graph_id));
 
   std::string backend_name;
   TF_RETURN_IF_ERROR(
@@ -110,7 +112,7 @@ Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
 
   for (auto edge : node->in_edges()) {
     if (edge == NULL) {
-      NGRAPH_VLOG(1) << "Replacing "<< node_type <<", found null edge: ";
+      NGRAPH_VLOG(1) << "Replacing " << node_type << ", found null edge: ";
       continue;
     }
 
@@ -139,22 +141,21 @@ Status ReplaceNGraphAssign(Graph* graph, Node* node, Node** replacement,
   (*replacement)->set_assigned_device_name(node->assigned_device_name());
 
   NGRAPH_VLOG(4) << "Getting in edges: ";
-        for (auto edge : node->in_edges()) {
-          NGRAPH_VLOG(4) << "Replacing: " << edge->DebugString();
-          if(edge->IsControlEdge()){
-            graph->AddEdge(edge->src(), edge->src_output(), (*replacement), edge->dst_input());
-            graph->RemoveEdge(edge);
-          }
-        }
+  for (auto edge : node->in_edges()) {
+    NGRAPH_VLOG(4) << "Replacing: " << edge->DebugString();
+    if (edge->IsControlEdge()) {
+      graph->AddEdge(edge->src(), edge->src_output(), (*replacement),
+                     edge->dst_input());
+      graph->RemoveEdge(edge);
+    }
+  }
   return Status::OK();
 }
 
 // ReplaceNGraphApplyGradientDescent
-Status ReplaceNGraphApplyGradientDescent(Graph* graph, Node* node,
-                                         Node** replacement,
-                                         std::string node_new_name,
-                                         bool just_looking,
-                                         bool outputs_ng_supported, int graph_id) {
+Status ReplaceNGraphApplyGradientDescent(
+    Graph* graph, Node* node, Node** replacement, std::string node_new_name,
+    bool just_looking, bool outputs_ng_supported, int graph_id) {
   NGRAPH_VLOG(1) << "Start replacing NGraphApplyGradientDescent "
                  << node->name();
 
@@ -163,7 +164,8 @@ Status ReplaceNGraphApplyGradientDescent(Graph* graph, Node* node,
   bool use_locking;
   TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "use_locking", &use_locking));
   // int graph_id;
-  // TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "ngraph_graph_id", &graph_id));
+  // TF_RETURN_IF_ERROR(GetNodeAttr(node->attrs(), "ngraph_graph_id",
+  // &graph_id));
   std::string backend_name;
   TF_RETURN_IF_ERROR(
       GetNodeAttr(node->attrs(), "_ngraph_backend", &backend_name));
@@ -209,17 +211,18 @@ Status ReplaceNGraphApplyGradientDescent(Graph* graph, Node* node,
 //
 Status RewriteForTracking(Graph* graph, int graph_id) {
   std::vector<Node*> replaced_nodes;
-  std::set<string> ng_supported_ops = {"NGraphVariable", "NGraphAssign",
-                                       "NGraphEncapsulate",
-                                       "NGraphApplyGradientDescent", "NGraphAssignSub","NGraphAssignAdd"};
+  std::set<string> ng_supported_ops = {
+      "NGraphVariable",    "NGraphAssign",
+      "NGraphEncapsulate", "NGraphApplyGradientDescent",
+      "NGraphAssignSub",   "NGraphAssignAdd"};
 
- for (auto node : graph->op_nodes()) {
+  for (auto node : graph->op_nodes()) {
     if (IsNGVariableType(node->type_string())) {
       NGRAPH_VLOG(1) << "Checking: " << DebugNode(node) << " " << node->name();
 
       bool just_looking = true;
       bool outputs_ng_supported = true;
-      
+
       // Check if all the outputs of this node ngraph supports
       for (auto edge : node->out_edges()) {
         auto dst = edge->dst();
@@ -257,58 +260,58 @@ Status RewriteForTracking(Graph* graph, int graph_id) {
       NGRAPH_VLOG(1) << "Requires Replacement "
                      << PrintBool(just_looking || !outputs_ng_supported);
 
-     std::string node_new_name = node->name();
+      std::string node_new_name = node->name();
 
-      //if (just_looking || !outputs_ng_supported) {
-        Node* replacement;
+      // if (just_looking || !outputs_ng_supported) {
+      Node* replacement;
 
-        
-        if (just_looking) {
-          node_new_name += "/peek";
-        }
+      if (just_looking) {
+        node_new_name += "/peek";
+      }
 
-        if (!outputs_ng_supported) {
-          node_new_name += "/non_ng_outputs";
-        }
+      if (!outputs_ng_supported) {
+        node_new_name += "/non_ng_outputs";
+      }
 
-        node_new_name += "/gid_" + to_string(graph_id);
-        NGRAPH_VLOG(1) << "Replacing " << node->name() << " New Node name "
-                       << node_new_name;
-      
-        // TODO(amprocte): Do we need to copy "_" attributes?
-        // TODO(mingshan): Combine this three to one helper function
-        if (node->type_string() == "NGraphVariable") {
-          ReplaceNGraphVariable(graph, node, &replacement, node_new_name,
-                                just_looking, outputs_ng_supported, graph_id);
-        } else if (IsNGAssignType(node->type_string())) {
-          ReplaceNGraphAssign(graph, node, &replacement, node_new_name,
-                              just_looking, outputs_ng_supported,graph_id);
-        } else if (node->type_string() == "NGraphApplyGradientDescent") {
-          ReplaceNGraphApplyGradientDescent(graph, node, &replacement,
-                                            node_new_name, just_looking,
-                                            outputs_ng_supported, graph_id);
-        }
+      node_new_name += "/gid_" + to_string(graph_id);
+      NGRAPH_VLOG(1) << "Replacing " << node->name() << " New Node name "
+                     << node_new_name;
 
-        std::vector<const Edge*> edges;
-        for (auto edge : node->out_edges()) {
-          edges.push_back(edge);
-        }
+      // TODO(amprocte): Do we need to copy "_" attributes?
+      // TODO(mingshan): Combine this three to one helper function
+      if (node->type_string() == "NGraphVariable") {
+        ReplaceNGraphVariable(graph, node, &replacement, node_new_name,
+                              just_looking, outputs_ng_supported, graph_id);
+      } else if (IsNGAssignType(node->type_string())) {
+        ReplaceNGraphAssign(graph, node, &replacement, node_new_name,
+                            just_looking, outputs_ng_supported, graph_id);
+      } else if (node->type_string() == "NGraphApplyGradientDescent") {
+        ReplaceNGraphApplyGradientDescent(graph, node, &replacement,
+                                          node_new_name, just_looking,
+                                          outputs_ng_supported, graph_id);
+      }
 
-        for (auto edge : edges) {
-          graph->AddEdge(replacement, edge->src_output(), edge->dst(),
-                         edge->dst_input());
-          graph->RemoveEdge(edge);
-        }
-        NGRAPH_VLOG(1) << "Replaced " << edges.size() << " of output edges ";
+      std::vector<const Edge*> edges;
+      for (auto edge : node->out_edges()) {
+        edges.push_back(edge);
+      }
 
-        replaced_nodes.push_back(node);
+      for (auto edge : edges) {
+        graph->AddEdge(replacement, edge->src_output(), edge->dst(),
+                       edge->dst_input());
+        graph->RemoveEdge(edge);
+      }
+      NGRAPH_VLOG(1) << "Replaced " << edges.size() << " of output edges ";
+
+      replaced_nodes.push_back(node);
       // } else {
       //   NGRAPH_VLOG(1)
-      //       << "No replacement (not just looking and all outputs ng support): "
+      //       << "No replacement (not just looking and all outputs ng support):
+      //       "
       //       << node->name();
       // }
-    } // end of checking if it is NGVariableType
-  }  // end of looping through the nodes in the graph
+    }  // end of checking if it is NGVariableType
+  }    // end of looping through the nodes in the graph
   for (auto node : replaced_nodes) {
     graph->RemoveNode(node);
   }

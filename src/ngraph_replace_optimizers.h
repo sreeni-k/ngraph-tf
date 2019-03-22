@@ -20,8 +20,19 @@
 #define NGRAPH_TF_REPLACE_OPTIMIZERS_H_
 
 #include "tensorflow/core/graph/graph.h"
+#include "ngraph/runtime/backend.hpp"
+
+using namespace std;
+namespace ng=ngraph;
+namespace tensorflow {
+
+namespace ngraph_bridge {
 
 
 Status ReplaceOptimizers(Graph* graph, int graph_id);
 
-#endif //NGRAPH_TF_REPLACE_OPTIMIZERS_H_
+
+} // ngraph_bridge
+} //tensorflow
+
+#endif  // NGRAPH_TF_REPLACE_OPTIMIZERS_H_

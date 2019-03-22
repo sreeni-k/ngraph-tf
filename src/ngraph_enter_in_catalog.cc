@@ -40,7 +40,7 @@ Status GetSharedName(Node* node, string* shared_name) {
     }
     return Status::OK();
   }
- 
+
   auto temp = node;
   while (temp->type_string() != "NGraphVariable") {
     Node* input_0;
@@ -67,7 +67,7 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
       string shared_name;
       TF_RETURN_IF_ERROR(GetSharedName(node, &shared_name));
       NGraphCatalog::AddCatalog(node_key, shared_name);
-      //add_graph_id.push_back(node);
+      // add_graph_id.push_back(node);
       NGRAPH_VLOG(1) << "Adding in Catalog ";
       NGRAPH_VLOG(1) << "Key: " << node_key;
       NGRAPH_VLOG(1) << "Value: " << shared_name;
@@ -103,12 +103,12 @@ Status EnterInCatalog(Graph* graph, int graph_id) {
       }
       NGraphCatalog::AddEncapCopyOutputCatalog(node->name(), op_index_to_copy);
 
-      //add_graph_id.push_back(node);
+      // add_graph_id.push_back(node);
     }  // end of node is type NGraphEncapsulate
 
     // Update the output tensor map
 
-    if(IsNGVariableType(node->type_string())){
+    if (IsNGVariableType(node->type_string())) {
       for (auto edge : node->in_edges()) {
         if (!edge->src()->IsOp() || edge->IsControlEdge() ||
             IsRefType(edge->dst()->input_type(edge->dst_input())) ||
