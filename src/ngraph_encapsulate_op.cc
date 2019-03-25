@@ -736,6 +736,7 @@ class NGraphEncapsulateOp : public OpKernel {
           dst_tv->read(dst_ptr, 0,
                        dst_tv->get_element_count() * ng_element_type.size());
           event_individual_copy_output.Stop();
+          Event::WriteTrace(event_individual_copy_output);
         }
       }
     } catch (const std::exception& exp) {
