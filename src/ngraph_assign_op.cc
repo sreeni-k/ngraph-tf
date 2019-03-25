@@ -134,13 +134,19 @@ class NGraphAssignOp : public OpKernel {
       NGRAPH_VLOG(1) << "Is null " << ((ng_val == NULL) ? "Yes" : "No");
       NGRAPH_VLOG(1) << " Print ng Value to Assign ";
       PrintNGTensor(ng_val);
+      Event event_copy("D2D Copy", name().c_str());
       ng_tensor_to_assign->copy_from(*ng_val);
+      event_copy.Stop();
+      Event::WriteTrace(event_copy);
     } else {
       NGRAPH_VLOG(1) << "Getting from TF : " << valkey;
       void* tf_src_ptr = (void*)DMAHelper::base(&rhs);
+      Event event_host_2_dev_copy("H2D Copy", name().c_str());
       ng_tensor_to_assign->write(
           tf_src_ptr, 0, ng_tensor_to_assign->get_element_count() *
                              ng_tensor_to_assign->get_element_type().size());
+      event_host_2_dev_copy.Stop();
+      Event::WriteTrace(event_host_2_dev_copy);
     }
 
     NGRAPH_VLOG(1) << " Print NG Tensor ";
