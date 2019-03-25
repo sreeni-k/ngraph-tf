@@ -116,7 +116,6 @@ class NGraphAssignAddOp : public OpKernel {
     shared_ptr<ngraph::runtime::Tensor> ng_tensor_to_assign = var->ng_tensor();
 
     NGRAPH_VLOG(1) << " Before Computing ";
-
     // Create Backend
     BackendManager::CreateBackend(ng_backend_name_);
     ng::runtime::Backend* op_backend =
@@ -158,9 +157,9 @@ class NGraphAssignAddOp : public OpKernel {
       ng_val = op_backend->create_tensor(ng_element_type, ng_shape);
       ng_val->write(tf_src_ptr, 0, ng_val->get_element_count() *
                                        ng_val->get_element_type().size());
-      input_from_TF.Stop();
       Event::WriteTrace(input_from_TF);
     }
+
 
     // Create nGraph Function
     // Create Input Tensor Vector

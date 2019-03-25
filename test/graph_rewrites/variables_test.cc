@@ -154,7 +154,7 @@ TEST(Variables, SmallGraph2) {
   std::cout << "initialize var: " << ng_outputs1[0].matrix<float>()
             << std::endl;
 
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 1; i++) {
     ASSERT_OK(ng_session.Run({assign2}, &ng_outputs2));
     // Print the output
     std::cout << "itr: " << i << " ,Result: " << ng_outputs2[0].matrix<float>()
@@ -178,7 +178,7 @@ TEST(Variables, SmallGraph2) {
       &tf_outputs1));
   std::cout << "initialize var: " << tf_outputs1[0].matrix<float>()
             << std::endl;
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 1; i++) {
     ASSERT_OK(tf_session.Run({assign2}, &tf_outputs2));
     // Print the output
     std::cout << "itr: " << i << " ,Result: " << tf_outputs2[0].matrix<float>()
@@ -404,6 +404,152 @@ TEST(Variables, SmallGraph4) {
   Compare(tf_outputs3, ng_outputs3);
   Compare(tf_outputs4, ng_outputs4);
   Compare(tf_outputs5, ng_outputs5);
+}
+
+
+// Simple Graph
+TEST(Variables, SmallGraph5) {
+  Scope root = Scope::NewRootScope();
+
+  PartialTensorShape varShape({2, 2});
+  auto var = ops::Variable(root, varShape, DT_FLOAT);
+  auto init_value = ops::Const(root, {{1.f, 1.f}, {1.f, 1.f}});
+  auto var_assign = ops::Assign(root, var, init_value);
+
+  auto c = ops::Const(root, {{1.f, 1.f}, {1.f, 1.f}});
+
+  auto add = ops::Add(root, var, c);
+
+  auto assign = ops::AssignSub(root, var, add);
+
+  // Turn off optimizations so that all the nodes are processed
+  tensorflow::SessionOptions options;
+  options.config.mutable_graph_options()
+      ->mutable_optimizer_options()
+      ->set_opt_level(tensorflow::OptimizerOptions_Level_L0);
+  options.config.mutable_graph_options()
+      ->mutable_rewrite_options()
+      ->set_constant_folding(tensorflow::RewriterConfig::OFF);
+
+  // Run on nGraph
+  ActivateNGraph();
+  ClientSession ng_session(root, options);
+  std::vector<tensorflow::Tensor> ng_outputs1;
+  std::vector<tensorflow::Tensor> ng_outputs2;
+  std::vector<tensorflow::Tensor> ng_outputs3;
+
+  ASSERT_OK(ng_session.Run(
+      {
+          var_assign,
+      },
+      &ng_outputs1));
+  std::cout << "initialize var: " << ng_outputs1[0].matrix<float>()
+            << std::endl;
+  for (int i = 0; i < 2; i++) {
+    ASSERT_OK(ng_session.Run({assign}, &ng_outputs2));
+    // Print the output
+    std::cout << "itr: " << i << " ,Result: " << ng_outputs2[0].matrix<float>()
+              << std::endl;
+  }
+
+  ASSERT_OK(ng_session.Run({var}, &ng_outputs3));
+  std::cout << "Final var: " << ng_outputs3[0].matrix<float>() << std::endl;
+
+  // Run on TF
+  DeactivateNGraph();
+  ClientSession tf_session(root, options);
+  std::vector<tensorflow::Tensor> tf_outputs1;
+  std::vector<tensorflow::Tensor> tf_outputs2;
+  std::vector<tensorflow::Tensor> tf_outputs3;
+
+  ASSERT_OK(tf_session.Run(
+      {
+          var_assign,
+      },
+      &tf_outputs1));
+  std::cout << "initialize var: " << tf_outputs1[0].matrix<float>()
+            << std::endl;
+  for (int i = 0; i < 2; i++) {
+    ASSERT_OK(tf_session.Run({assign}, &tf_outputs2));
+    // Print the output
+    std::cout << "itr: " << i << " ,Result: " << tf_outputs2[0].matrix<float>()
+              << std::endl;
+  }
+
+  ASSERT_OK(tf_session.Run({var}, &tf_outputs3));
+  std::cout << "Final var: " << tf_outputs3[0].matrix<float>() << std::endl;
+
+  Compare(tf_outputs1, ng_outputs1);
+  Compare(tf_outputs2, ng_outputs2);
+  Compare(tf_outputs3, ng_outputs3);
+}
+
+
+// Simple Graph
+TEST(Variables, SmallGraph6) {
+  Scope root = Scope::NewRootScope();
+
+  PartialTensorShape varShape({2, 2});
+  auto var = ops::Variable(root, varShape, DT_FLOAT);
+  auto init_value = ops::Const(root, {{1.f, 1.f}, {1.f, 1.f}});
+  auto var_assign = ops::Assign(root, var, init_value);
+
+  auto c = ops::Const(root, {{1.f, 1.f}, {1.f, 1.f}});
+
+  auto add = ops::Add(root, var, c);
+
+  auto assign = ops::AssignAdd(root, var, add);
+
+  // Turn off optimizations so that all the nodes are processed
+  tensorflow::SessionOptions options;
+  options.config.mutable_graph_options()
+      ->mutable_optimizer_options()
+      ->set_opt_level(tensorflow::OptimizerOptions_Level_L0);
+  options.config.mutable_graph_options()
+      ->mutable_rewrite_options()
+      ->set_constant_folding(tensorflow::RewriterConfig::OFF);
+
+  // Run on nGraph
+  ActivateNGraph();
+  ClientSession ng_session(root, options);
+  std::vector<tensorflow::Tensor> ng_outputs1;
+  std::vector<tensorflow::Tensor> ng_outputs2;
+  std::vector<tensorflow::Tensor> ng_outputs3;
+
+  ASSERT_OK(ng_session.Run(
+      {
+          var_assign,
+      },
+      &ng_outputs1));
+
+  for (int i = 0; i < 2; i++) {
+    ASSERT_OK(ng_session.Run({assign}, &ng_outputs2));
+  }
+
+  ASSERT_OK(ng_session.Run({var}, &ng_outputs3));
+
+  // Run on TF
+  DeactivateNGraph();
+  ClientSession tf_session(root, options);
+  std::vector<tensorflow::Tensor> tf_outputs1;
+  std::vector<tensorflow::Tensor> tf_outputs2;
+  std::vector<tensorflow::Tensor> tf_outputs3;
+
+  ASSERT_OK(tf_session.Run(
+      {
+          var_assign,
+      },
+      &tf_outputs1));
+  for (int i = 0; i < 2; i++) {
+    ASSERT_OK(tf_session.Run({assign}, &tf_outputs2));
+    // Print the output
+  }
+
+  ASSERT_OK(tf_session.Run({var}, &tf_outputs3));
+  
+  Compare(tf_outputs1, ng_outputs1);
+  Compare(tf_outputs2, ng_outputs2);
+  Compare(tf_outputs3, ng_outputs3);
 }
 
 }  // namespace testing

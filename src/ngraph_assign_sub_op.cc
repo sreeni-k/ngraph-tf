@@ -32,7 +32,6 @@
 #include "ngraph_timer.h"
 #include "ngraph_utils.h"
 #include "ngraph_var.h"
-#include "ngraph_timer.h"
 
 using namespace std;
 namespace ng = ngraph;
