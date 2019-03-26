@@ -16,7 +16,7 @@
 
 # Environment to build and unit-test ngraph-tensorflow-bridge
 
-# Environment to build and unit-test ngraph on debian10 (buster)
+# Environment to build and unit-test ngraph on debian (stretch)
 # with gcc (Debian 6.3.0-18+deb9u1) 6.3.0 20170516
 # with python 3.5.3
 
